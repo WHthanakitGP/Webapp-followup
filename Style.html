@@ -1,0 +1,365 @@
+<style>
+    /* 🚨 1. ตั้งค่าพื้นฐานให้รองรับมือถือ */
+    * { 
+        box-sizing: border-box; 
+    }
+    
+    body { 
+        font-family: 'Sarabun', sans-serif; 
+        background: #ecf0f1; 
+        margin: 0; 
+        padding: 0; 
+        color: #2c3e50; 
+        -webkit-font-smoothing: antialiased;
+    }
+    
+    /* 🚨 2. ปรับแถบ Navbar ให้ยืดหยุ่น */
+    .navbar { 
+        background: #2c3e50; 
+        padding: 15px 30px; 
+        display: flex; 
+        justify-content: space-between; 
+        align-items: center; 
+        box-shadow: 0 2px 10px rgba(0,0,0,0.1); 
+        position: sticky; 
+        top: 0; 
+        z-index: 100;
+        flex-wrap: wrap; /* ยอมให้ตกบรรทัดในจอมือถือ */
+        gap: 15px;
+    }
+    
+    .navbar button { 
+        background: transparent; 
+        border: none; 
+        color: #bdc3c7; 
+        font-size: 15px; 
+        cursor: pointer; 
+        font-family: inherit; 
+        padding: 8px 12px; 
+        border-radius: 4px; 
+        transition: 0.3s;
+        font-weight: 500;
+    }
+    
+    .navbar button:hover, .navbar button.active { 
+        color: #fff; 
+        background: rgba(255,255,255,0.1); 
+    }
+    
+    /* 🚨 3. จัดการโครงสร้างกล่องและ Grid */
+    .container { 
+        max-width: 1400px; 
+        margin: 0 auto; 
+        padding: 20px; 
+    }
+    
+    .panel { 
+        background: #fff; 
+        border-radius: 8px; 
+        padding: 25px; 
+        margin-bottom: 20px; 
+        box-shadow: 0 4px 6px rgba(0,0,0,0.05); 
+    }
+    
+    .panel-header { 
+        font-size: 18px; 
+        font-weight: bold; 
+        margin-bottom: 20px; 
+        color: #34495e; 
+        border-bottom: 2px solid #ecf0f1; 
+        padding-bottom: 10px; 
+    }
+    
+    /* ระบบ Grid พื้นฐานสำหรับ Desktop */
+    .grid-4 { display: grid; grid-template-columns: repeat(4, 1fr); gap: 20px; margin-bottom: 15px; }
+    .grid-3 { display: grid; grid-template-columns: repeat(3, 1fr); gap: 20px; margin-bottom: 15px; }
+    .grid-2 { display: grid; grid-template-columns: repeat(2, 1fr); gap: 20px; margin-bottom: 15px; }
+    
+    /* 🚨 4. ฟอร์มและ Input */
+    .form-group { margin-bottom: 5px; }
+    .form-group label { 
+        display: block; 
+        margin-bottom: 8px; 
+        font-weight: 500; 
+        color: #7f8c8d; 
+        font-size: 13px; 
+    }
+    
+    input[type="text"], input[type="date"], select { 
+        width: 100%; 
+        padding: 10px 12px; 
+        border: 1px solid #bdc3c7; 
+        border-radius: 4px; 
+        font-family: inherit; 
+        font-size: 14px; 
+        background: #f9fbfc; 
+        transition: 0.3s; 
+    }
+    
+    input[type="text"]:focus, select:focus { 
+        border-color: #3498db; 
+        outline: none; 
+        background: #fff; 
+        box-shadow: 0 0 0 3px rgba(52,152,219,0.1); 
+    }
+    
+    .btn { 
+        cursor: pointer; 
+        font-family: inherit; 
+        font-weight: bold; 
+        transition: 0.2s; 
+    }
+    
+    .btn:active { transform: scale(0.98); }
+    
+    /* 🚨 5. ตาราง (Tables) */
+    .table { 
+        width: 100%; 
+        border-collapse: collapse; 
+        margin-top: 10px; 
+        font-size: 14px; 
+    }
+    
+    .table th, .table td { 
+        padding: 12px 15px; 
+        border-bottom: 1px solid #ecf0f1; 
+        text-align: left; 
+    }
+    
+    .table th { background: #f4f6f7; color: #7f8c8d; font-weight: bold; }
+    .table tbody tr:hover { background: #fafbfc; }
+    
+    /* 🚨 6. Modals (ป๊อปอัป) */
+    .modal-overlay { 
+        position: fixed; 
+        top: 0; 
+        left: 0; 
+        width: 100%; 
+        height: 100%; 
+        background: rgba(44,62,80,0.8); 
+        display: none; 
+        justify-content: center; 
+        align-items: center; 
+        z-index: 1000; 
+        backdrop-filter: blur(3px); 
+    }
+    
+    .modal-content { 
+        background: #fff; 
+        padding: 25px; 
+        border-radius: 8px; 
+        box-shadow: 0 10px 30px rgba(0,0,0,0.2); 
+        width: 100%; 
+        max-width: 600px; /* ขยายให้พอดีขึ้น */
+        max-height: 90vh; 
+        display: flex; 
+        flex-direction: column; 
+    }
+    
+    .modal-header { 
+        display: flex; 
+        justify-content: space-between; 
+        align-items: center; 
+        margin-bottom: 20px; 
+        border-bottom: 2px solid #ecf0f1; 
+        padding-bottom: 10px; 
+    }
+    
+    .modal-title { margin: 0; color: #2c3e50; font-size: 18px; }
+    .btn-close { 
+        background: none; 
+        border: none; 
+        font-size: 24px; 
+        color: #95a5a6; 
+        cursor: pointer; 
+        line-height: 1; 
+    }
+    
+    .btn-close:hover { color: #e74c3c; }
+    
+    .modal-body { 
+        overflow-y: auto; 
+        flex: 1; 
+        padding-right: 5px; 
+    }
+    
+    /* 🚨 7. การ์ดงานและ KPI */
+    .kpi-box { 
+        background: #fff; 
+        padding: 20px; 
+        border-radius: 8px; 
+        box-shadow: 0 4px 6px rgba(0,0,0,0.05); 
+    }
+    
+    .kpi-box h3 { margin: 0 0 10px 0; font-size: 15px; color: #7f8c8d; }
+    .kpi-value { font-size: 32px; font-weight: bold; color: #2c3e50; }
+    
+    .my-task-list { 
+        margin-top: 15px; 
+        max-height: 400px; 
+        overflow-y: auto; 
+        padding-right: 5px; 
+    }
+    
+    .my-proj-card { 
+        background: #fdfdfd; 
+        border: 1px solid #bdc3c7; 
+        border-radius: 6px; 
+        padding: 12px; 
+        margin-bottom: 10px; 
+        border-left: 4px solid #3498db; 
+    }
+    
+    .todo-item { 
+        background: #fdfdfd; 
+        border: 1px solid #bdc3c7; 
+        border-left: 4px solid #e74c3c; 
+        border-radius: 4px; 
+        padding: 12px; 
+        margin-bottom: 10px; 
+    }
+    
+    .todo-item.overdue { background: #fff5f5; border-color: #e74c3c; }
+    
+    .todo-proj-name { font-size: 11px; color: #7f8c8d; margin-bottom: 4px; }
+    .todo-task-name { font-size: 14px; font-weight: bold; color: #2c3e50; margin-bottom: 6px; }
+    .todo-meta { font-size: 12px; color: #34495e; display: flex; justify-content: space-between; align-items: center; }
+    
+    .progress-container { width: 100%; height: 8px; background: #ecf0f1; border-radius: 4px; overflow: hidden; margin: 10px 0; }
+    .progress-fill { height: 100%; background: #3498db; transition: 0.5s; }
+    .progress-fill.done { background: #27ae60; }
+    
+    .stat-bar { display: flex; gap: 10px; font-size: 11px; color: #7f8c8d; }
+    .stat-item { background: #ecf0f1; padding: 2px 6px; border-radius: 3px; }
+    .stat-item.done { background: #eafaf1; color: #27ae60; }
+    .stat-item.prog { background: #ebf5fb; color: #2980b9; }
+
+    /* อื่นๆ (Utilities) */
+    .view-section { display: none; }
+    .view-section.active { display: block; animation: fadeIn 0.3s; }
+    @keyframes fadeIn { from { opacity: 0; transform: translateY(10px); } to { opacity: 1; transform: translateY(0); } }
+    .text-center { text-align: center; }
+    .text-red { color: #c0392b !important; }
+    .text-green { color: #27ae60 !important; }
+    .text-orange { color: #f39c12 !important; }
+    .text-blue { color: #2980b9 !important; }
+    .badge { padding: 4px 8px; border-radius: 12px; font-size: 12px; font-weight: bold; color: white; display: inline-block; }
+    .bg-blue { background: #3498db; }
+    .bg-green { background: #2ecc71; }
+    .bg-orange { background: #f39c12; }
+    .bg-gray { background: #bdc3c7; }
+    .bg-red { background: #e74c3c; }
+    .clickable { cursor: pointer; transition: 0.2s; }
+    .clickable:hover { transform: scale(1.05); }
+
+    .mini-calendar { display: grid; grid-template-columns: repeat(7, 1fr); gap: 2px; text-align: center; font-size: 12px; margin-top: 10px; }
+    .cal-date { padding: 6px; background: #fdfdfd; border-radius: 4px; border: 1px solid #ecf0f1; }
+    .cal-date.has-task { background: #3498db; color: white; font-weight: bold; cursor: pointer; }
+    .cal-date.overdue { background: #e74c3c; color: white; font-weight: bold; cursor: pointer; }
+
+    .timeline-item { border-left: 2px solid #3498db; padding: 10px 15px; margin-bottom: 10px; position: relative; background: #fff; border-radius: 0 4px 4px 0; border: 1px solid #ecf0f1; border-left-width: 4px; }
+    .timeline-item.overdue { border-left-color: #e74c3c; background: #fff5f5; }
+    .timeline-item::before { content: ''; position: absolute; left: -6px; top: 15px; width: 10px; height: 10px; background: #3498db; border-radius: 50%; }
+    .timeline-item.overdue::before { background: #e74c3c; }
+    .timeline-date { font-size: 11px; color: #7f8c8d; font-weight: bold; margin-bottom: 4px; }
+    .timeline-title { font-size: 13px; color: #2c3e50; }
+
+    .list-item { padding: 12px; border-bottom: 1px solid #ecf0f1; display: flex; justify-content: space-between; align-items: center; }
+    .list-title { font-weight: bold; color: #2c3e50; font-size: 14px; }
+    .list-meta { font-size: 12px; color: #7f8c8d; margin-top: 4px; }
+
+    .archive-tab { background: #f4f6f7; border: 1px solid #bdc3c7; padding: 10px 15px; cursor: pointer; font-family: inherit; font-size: 14px; color: #7f8c8d; border-bottom: none; border-radius: 6px 6px 0 0; }
+    .archive-tab.active { background: #fff; color: #2c3e50; font-weight: bold; border-top: 3px solid #34495e; border-bottom: 1px solid #fff; margin-bottom: -1px; }
+
+    .sub-task-box { background: #fdfdfd; border: 1px solid #bdc3c7; border-left: 4px solid #f39c12; padding: 15px; margin-bottom: 15px; border-radius: 4px; position: relative; }
+
+    /* ========================================================= */
+    /* 🚨 พลังของ RESPONSIVE สำหรับมือถือและแท็บเล็ต (Mobile Design) */
+    /* ========================================================= */
+    
+    /* กฎ 1: ครอบตารางให้เลื่อนได้บนจอมือถือ */
+    .table-responsive {
+        width: 100%;
+        overflow-x: auto;
+        -webkit-overflow-scrolling: touch;
+        margin-bottom: 10px;
+    }
+    
+    @media screen and (max-width: 768px) {
+        
+        /* 🚨 กฎ 2: บังคับให้ปุ่มเมนูด้านบน ห่อตัว (Wrap) ลงมาให้สวยงาม */
+        .navbar {
+            flex-direction: column;
+            align-items: stretch;
+            padding: 15px;
+            gap: 15px;
+        }
+        
+        .navbar > div:nth-child(2) {
+            width: 100%;
+            flex-wrap: wrap;
+            justify-content: space-between;
+        }
+        
+        .navbar button, .navbar select {
+            flex: 1 1 calc(50% - 10px); /* ให้ปุ่มเรียง 2 อันต่อแถว */
+            text-align: center;
+            padding: 12px 10px;
+            font-size: 14px !important;
+        }
+        
+        /* 🚨 กฎ 3: เปลี่ยน Grid แนวนอน ให้กลายเป็นกล่องเรียงแนวตั้ง */
+        .grid-4, .grid-3, .grid-2 {
+            display: flex !important;
+            flex-direction: column !important;
+            gap: 15px !important;
+        }
+        
+        /* 🚨 กฎ 4: ปรับขนาด Popup ให้กว้างเต็มจอ และยืดหยุ่น */
+        .modal-content {
+            width: 95% !important;
+            max-width: none !important;
+            max-height: 90vh !important;
+            margin: 10px;
+            padding: 15px !important;
+        }
+        
+        .container {
+            padding: 10px;
+        }
+        
+        .panel {
+            padding: 15px !important;
+        }
+        
+        /* 🚨 กฎ 5: ปรับปุ่มแถบแฟ้มเก็บงานให้เลื่อนซ้ายขวาได้ */
+        #archiveView > .panel > div:nth-child(2) {
+            overflow-x: auto;
+            white-space: nowrap;
+            padding-bottom: 10px;
+            display: flex !important;
+        }
+        
+        .archive-tab {
+            flex: 0 0 auto;
+        }
+        
+        /* 🚨 กฎ 6: ทำให้การ์ดงานและปุ่มข้างในกดง่ายขึ้น */
+        .todo-item .grid-3, .my-proj-card .grid-3 {
+            display: flex !important;
+            flex-direction: column !important;
+        }
+        
+        .btn-view-detail {
+            width: 100%;
+            padding: 10px !important;
+            font-size: 14px !important;
+        }
+        
+        /* 🚨 กฎ 7: ขยาย Font Size ในช่องกรอกข้อมูล เพื่อป้องกัน iOS Zoom อัตโนมัติ */
+        input[type="text"], input[type="date"], select, textarea {
+            font-size: 16px !important; 
+            padding: 12px !important;
+        }
+    }
+</style>
