@@ -1,0 +1,70 @@
+<!-- ========================================== -->
+<!-- หน้าฟอร์มสร้างโปรเจกต์ใหม่ (Create Project) -->
+<!-- ========================================== -->
+<div id="createView" class="container view-section">
+    <div class="panel">
+        <div class="panel-header">📝 สร้างโปรเจกต์ใหม่ (Main Project)</div>
+        
+        <!-- แถวที่ 1: ชื่อและผู้รับผิดชอบ -->
+        <div class="grid-3">
+            <div class="form-group"><label>ชื่องานหลัก</label><input type="text" id="mainTaskName" placeholder="เช่น ทำกราฟิกโปรโมชั่นเดือน 10"></div>
+            <div class="form-group"><label>ผู้คุมโปรเจกต์ (Owner)</label><select id="mainAssignee"></select></div>
+            <div class="form-group"><label>ผู้อนุมัติ (Approver) 👑</label><select id="mainApprover"></select></div>
+        </div>
+        
+        <!-- แถวที่ 2: หมวดหมู่และความสำคัญ -->
+        <div class="grid-4">
+            <div class="form-group"><label>แบรนด์</label><select id="mainBrand"></select></div>
+            <div class="form-group"><label>หมวดหมู่งาน</label><select id="mainCategory"></select></div>
+            <div class="form-group"><label>ความสำคัญ (Priority)</label><select id="mainPriority"></select></div>
+            <div class="form-group"><label>สถานะเริ่มต้น</label><select id="mainTaskStatus"></select></div>
+        </div>
+        
+        <!-- แถวที่ 3: วันที่ -->
+        <div class="grid-2">
+            <div class="form-group">
+                <label>วันที่เริ่ม</label>
+                <div style="display:flex; gap:5px;">
+                    <input type="text" id="mainStartDate" class="date-picker" style="flex:1; background:#fff;" placeholder="คลิกเลือกวันและเวลา">
+                    <button type="button" class="btn" style="background:#ecf0f1; color:#2c3e50; padding:0 10px; border:1px solid #bdc3c7;" onclick="setNow(this)">ตอนนี้</button>
+                </div>
+            </div>
+            <div class="form-group">
+                <label>กำหนดส่ง</label>
+                <div style="display:flex; gap:5px;">
+                    <input type="text" id="mainDueDate" class="date-picker" style="flex:1; background:#fff;" placeholder="คลิกเลือกวันและเวลา">
+                    <button type="button" class="btn" style="background:#ecf0f1; color:#2c3e50; padding:0 10px; border:1px solid #bdc3c7;" onclick="setNow(this)">ตอนนี้</button>
+                </div>
+            </div>
+        </div>
+        
+        <!-- แถวที่ 4: ลิงก์และหมายเหตุ -->
+        <div class="grid-2">
+            <div class="form-group">
+                <label>ลิงก์ผลงานรวม (Result Link)</label>
+                <input type="text" id="mainResultLink" placeholder="วางลิงก์ Google Drive/Folder ของโปรเจกต์">
+            </div>
+            <div class="form-group">
+                <label>หมายเหตุ</label>
+                <input type="text" id="mainRemark" placeholder="ข้อความเพิ่มเติม (ถ้ามี)">
+            </div>
+        </div>
+
+    <!-- ส่วนของงานย่อย -->
+    <div class="panel">
+        <div class="panel-header"><span>📋 แตกงานย่อย (Sub-Tasks)</span></div>
+        <div id="subTasksContainer"></div>
+        
+        <!-- ปุ่มเพิ่มงานย่อยย้ายมาอยู่ด้านล่าง -->
+        <div style="margin-top: 15px;">
+            <button class="btn btn-add" style="background: #eaf2f8; color: #2980b9; width: 100%; padding: 12px; font-size: 15px; border: 2px dashed #3498db; cursor: pointer; transition: 0.2s;" onclick="addSubTask()">
+                ➕ กดเพื่อแตกงานย่อยเพิ่ม
+            </button>
+        </div>
+    </div>
+    
+    <!-- ปุ่มบันทึก -->
+    <div style="text-align:right; margin-top:20px;">
+        <button class="btn" style="background:#27ae60; color:white; padding:12px 30px; font-size:16px;" onclick="submitData()" id="saveBtn">💾 บันทึกโปรเจกต์เข้าระบบ</button>
+    </div>
+</div>
