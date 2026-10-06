@@ -1,0 +1,368 @@
+<!DOCTYPE html>
+<html>
+<head>
+  <base target="_top">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+  <link href="https://fonts.googleapis.com/css2?family=Sarabun:wght@300;400;500;700&display=swap" rel="stylesheet">
+  
+  <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/flatpickr/dist/flatpickr.min.css">
+  <link rel="stylesheet" type="text/css" href="https://npmcdn.com/flatpickr/dist/themes/material_blue.css">
+  <script src="https://cdn.jsdelivr.net/npm/flatpickr"></script>
+  <script src="https://npmcdn.com/flatpickr/dist/l10n/th.js"></script>
+
+  <?!= include('Style'); ?>
+  
+  <style>
+      .multi-select-container { position: relative; width: 100%; user-select: none; }
+      .multi-select-btn { border: 1px solid #bdc3c7; background: #fff; padding: 10px; border-radius: 4px; cursor: pointer; display: flex; justify-content: space-between; align-items: center; font-size: 13px; color: #2c3e50; }
+      .multi-select-dropdown { position: absolute; top: 100%; left: 0; width: 100%; background: #fff; border: 1px solid #bdc3c7; border-radius: 0 0 4px 4px; z-index: 9999; max-height: 200px; overflow-y: auto; display: none; box-shadow: 0 4px 6px rgba(0,0,0,0.1); margin-top: -2px; }
+      .multi-select-dropdown.show { display: block; }
+      .multi-select-optgroup { background: #f4f6f7; padding: 6px 10px; font-weight: bold; font-size: 12px; color: #7f8c8d; border-bottom: 1px solid #ecf0f1; border-top: 1px solid #ecf0f1; }
+      .multi-select-option { padding: 8px 10px; display: flex; align-items: center; cursor: pointer; font-size: 13px; color: #2c3e50; transition: 0.2s; margin:0; }
+      .multi-select-option:hover { background: #eaf2f8; }
+      .multi-select-option input[type="checkbox"] { margin-right: 8px; width: 15px; height: 15px; cursor: pointer; }
+      
+      .date-picker { color: #000 !important; background-color: #fff !important; }
+      .table-responsive { width: 100%; overflow-x: auto; -webkit-overflow-scrolling: touch; margin-bottom: 10px; }
+      
+      @media screen and (max-width: 768px) {
+          body { font-size: 14px; }
+          .grid-2, .grid-3, .grid-4 { display: flex !important; flex-direction: column !important; gap: 15px !important; }
+          .navbar { flex-direction: column; align-items: flex-start; padding: 15px; }
+          .navbar > div:nth-child(2) { width: 100%; flex-wrap: wrap; justify-content: flex-start; margin-top: 15px; gap: 8px; }
+          .modal-content { width: 95% !important; max-height: 90vh !important; padding: 15px !important; margin: 10px; }
+          .panel { padding: 15px !important; }
+          #archiveView > .panel > div:nth-child(2) { overflow-x: auto; white-space: nowrap; padding-bottom: 10px; display:flex !important; }
+          .kpi-box { padding: 15px !important; }
+          input, select, textarea, button { font-size: 16px !important; } 
+      }
+      /* 🚨 ระบบสีไฮไลท์พื้นหลัง Row ตามความสำคัญ (Priority) */
+      .prio-5 { background-color: #fdeaea !important; } /* แดงอ่อน */
+      .prio-4 { background-color: #fef5e7 !important; } /* ส้มอ่อน */
+      .prio-3 { background-color: #ebf5fb !important; } /* น้ำเงินอ่อน */
+      .prio-2 { background-color: #eafaf1 !important; } /* เขียวอ่อน */
+      
+      /* 🚨 ระบบกรอบเตือนและกระพริบช้าๆ สำหรับงานที่เลยกำหนด */
+      @keyframes slowBlinkAlert {
+          0% { background-color: rgba(231, 76, 60, 0.15); border-bottom: 2px solid #e74c3c; border-top: 2px solid #e74c3c; }
+          50% { background-color: transparent; border-bottom: 2px solid transparent; border-top: 2px solid transparent; }
+          100% { background-color: rgba(231, 76, 60, 0.15); border-bottom: 2px solid #e74c3c; border-top: 2px solid #e74c3c; }
+      }
+      
+      .overdue-row td {
+          animation: slowBlinkAlert 2s infinite !important;
+      }
+      .overdue-row td:first-child { border-left: 2px solid #e74c3c !important; }
+      .overdue-row td:last-child { border-right: 2px solid #e74c3c !important; }
+  </style>
+</head>
+<body>
+  <div class="navbar">
+    <div style="font-size:18px; font-weight:bold; color:#ecf0f1;">🚀 Project Hub</div>
+    <div style="display:flex; gap: 10px; align-items: center;">
+      <button onclick="switchView('myTasksView', this.id)" id="navMyTasks" class="active">👨‍💻 งานของฉัน</button>
+      <button onclick="switchView('dashboardView', this.id)" id="navDashboard" style="display:none;">📊 ภาพรวมทั้งหมด</button>
+      <button onclick="switchView('createView', this.id)" id="navCreate">➕ สร้างงานใหม่</button>
+      <button onclick="switchView('archiveView', this.id)" id="navArchive">🗂 แฟ้มเก็บงาน</button>
+      <div style="width: 1px; height: 20px; background: #34495e; margin: 0 5px;"></div>
+      <select id="userSelector" onchange="renderMyTasks(); renderArchive();" disabled style="background:#34495e; color:white; border:1px solid #7f8c8d; padding:5px; border-radius:4px; max-width:150px;">
+         <option value="">กำลังโหลดสิทธิ์...</option>
+      </select>
+    </div>
+  </div>
+
+  <div style="padding:15px; max-width: 1400px; margin: 0 auto;">
+      <div id="myTasksView" class="container view-section active">
+        <div class="grid-3">
+          <div class="kpi-box" style="border-top:4px solid #3498db;">
+              <h3>📂 โปรเจกต์ที่ฉันคุมอยู่ (Owner)</h3>
+              <div class="kpi-value" id="myProjCount">0</div>
+              <div class="my-task-list" id="myProjectsList"></div>
+          </div>
+          <div class="kpi-box" style="border-top:4px solid #e74c3c;">
+              <h3>📝 งานย่อยที่ต้องทำ (To-Do)</h3>
+              <div class="kpi-value text-red" id="mySubCount">0</div>
+              <div style="color:#7f8c8d; font-size:12px; margin-bottom:10px;">เลยกำหนด <span id="myOverdueCount" style="color:#e74c3c; font-weight:bold;">0</span> งาน</div>
+              <div class="my-task-list" id="myTodosList"></div>
+          </div>
+          <div class="kpi-box" style="border-top:4px solid #f39c12;">
+              <h3>✅ งานที่รอฉันตรวจ (Approvals)</h3>
+              <div class="kpi-value text-orange" id="myApprCount">0</div>
+              <div class="my-task-list" id="myApprovalsList"></div>
+          </div>
+        </div>
+
+        <div class="grid-2" style="margin-top:20px;">
+          <div class="panel">
+              <div class="panel-header">⏳ Timeline งานใกล้ถึงกำหนด</div>
+              <div id="miniCalendarDates" class="mini-calendar"></div>
+              <div id="upcomingTimeline" style="margin-top:15px;"></div>
+          </div>
+          <div class="panel">
+              <div class="panel-header">🎯 เป้าหมายงานประจำสัปดาห์ (ส่วนตัว)</div>
+              <div class="table-responsive">
+                  <table class="table" style="font-size: 13px; min-width: 500px;">
+                      <thead><tr><th style="width: 20%;">วัน/เดือน</th><th>เป้าหมาย</th><th>✅ เสร็จ</th><th>⏳ กำลังทำ</th><th>🚨 ล่าช้า</th><th>ความสำเร็จ (%)</th></tr></thead>
+                      <tbody id="weeklyPerfTable"></tbody>
+                  </table>
+              </div>
+          </div>
+        </div>
+      </div>
+
+      <!-- หน้าภาพรวม (Overview Dashboard) -->
+      <div id="dashboardView" class="container view-section">
+        
+        <!-- 🚨 อัปเดตแผงควบคุม (ตัวกรอง 3 แบบ) -->
+        <div class="panel" style="margin-bottom:20px;">
+            <div style="display:flex; flex-wrap:wrap; gap:15px; align-items:flex-end;">
+                <!-- 1. กรองวันที่ -->
+                <div style="flex:1; min-width:200px;">
+                    <label style="font-weight:bold; color:#2c3e50; font-size:12px;">📅 ช่วงเวลา (อิงกำหนดส่งหลัก)</label>
+                    <select id="filterPreset" class="form-control" style="margin-top:5px; width:100%;" onchange="handlePresetChange()">
+                        <option value="thisMonth">เดือนนี้</option><option value="lastMonth">เดือนที่แล้ว</option><option value="q1">Q1 (ม.ค.-มี.ค.)</option><option value="q2">Q2 (เม.ย.-มิ.ย.)</option><option value="q3">Q3 (ก.ค.-ก.ย.)</option><option value="q4">Q4 (ต.ค.-ธ.ค.)</option><option value="thisYear">ปีนี้ทั้งหมด</option><option value="all" selected>แสดงทั้งหมด (ไม่กรองวันที่)</option><option value="custom">กำหนดเอง (Custom Date)</option>
+                    </select>
+                </div>
+                <div id="customDateContainer" style="display:none; flex:1; min-width:250px;">
+                    <div style="display:flex; gap:10px;">
+                        <div style="flex:1;"><label style="font-size:12px;">เริ่ม</label><input type="date" id="filterStart" class="form-control" style="width:100%;"></div>
+                        <div style="flex:1;"><label style="font-size:12px;">ถึง</label><input type="date" id="filterEnd" class="form-control" style="width:100%;"></div>
+                    </div>
+                </div>
+                
+                <!-- 2. กรองความสำคัญ -->
+                <div style="flex:1; min-width:180px;">
+                    <label style="font-weight:bold; color:#2c3e50; font-size:12px;">🔥 ระดับความสำคัญ</label>
+                    <select id="filterPriority" class="form-control" style="margin-top:5px; width:100%;">
+                        <option value="all">แสดงทุกระดับ</option>
+                        <option value="(5)">(5) สำคัญและเร่งด่วนที่สุด</option>
+                        <option value="(4)">(4) สำคัญมาก</option>
+                        <option value="(3)">(3) สำคัญ</option>
+                        <option value="(2)">(2) ไม่สำคัญ</option>
+                        <option value="(1)">(1) Routine</option>
+                    </select>
+                </div>
+
+                <!-- 3. กรองพนักงาน / แผนก -->
+                <div style="flex:1; min-width:200px;">
+                    <label style="font-weight:bold; color:#2c3e50; font-size:12px;">👤 บุคคล / แผนกที่มีส่วนร่วม</label>
+                    <select id="filterAssignee" class="form-control" style="margin-top:5px; width:100%;">
+                        <option value="all">แสดงทุกคนทั้งหมด</option>
+                        <!-- Script จะดึงรายชื่อ+แผนกมาใส่ตรงนี้อัตโนมัติ -->
+                    </select>
+                </div>
+
+                <button class="btn" style="background:#2c3e50; color:white; padding:10px 20px; margin-bottom: 2px;" onclick="loadDashboard()">🔍 กรองข้อมูล</button>
+            </div>
+        </div>
+
+        <!-- 🚨 ย้ายตารางเจาะลึกขึ้นมาบนสุด พร้อมระบบพับเก็บ (Accordion) -->
+        <div class="panel">
+            <div class="panel-header" style="display:flex; flex-wrap:wrap; justify-content:space-between; align-items:center; cursor:pointer; background:#f4f6f7; padding:10px 15px; border-radius:6px;" onclick="toggleOverviewTable()">
+                <div style="display:flex; align-items:center; gap:10px;">
+                    <span id="overviewToggleIcon" style="font-size:16px; color:#3498db; transition:0.3s;">▼</span> 
+                    <span>🔥 ความคืบหน้าโปรเจกต์หลัก (เจาะลึก)</span>
+                </div>
+                <div style="font-size:13px; font-weight:normal;">โปรเจกต์ในช่วงนี้: <span class="badge bg-blue" id="kpiCreated">0</span> | ปิดจ็อบแล้ว: <span class="badge bg-green" id="kpiCompleted">0</span></div>
+            </div>
+            
+            <div id="overviewTableContainer" style="display:block; transition: 0.3s; margin-top:15px;">
+                <div style="margin-bottom: 10px; font-size:12px; color:#7f8c8d; text-align:right;">
+                    แถบสี: <span style="display:inline-block; width:10px; height:10px; background:#ecf0f1; border:1px solid #bdc3c7;"></span> ยังไม่ต้องทำ | <span style="display:inline-block; width:10px; height:10px; background:#bdc3c7;"></span> ยังไม่ได้ทำ | <span style="display:inline-block; width:10px; height:10px; background:#3498db;"></span> กำลังทำ | <span style="display:inline-block; width:10px; height:10px; background:#f39c12;"></span> ปฎิเสธ/แก้ | <span style="display:inline-block; width:10px; height:10px; background:#2ecc71;"></span> รอตรวจ | <span style="display:inline-block; width:10px; height:10px; background:#27ae60;"></span> เสร็จสมบูรณ์ | <span style="display:inline-block; width:10px; height:10px; background:#e74c3c;"></span> ล่าช้า
+                </div>
+                <div class="table-responsive">
+                    <table class="table" style="min-width:1100px;">
+                        <thead>
+                            <tr>
+                                <th style="width: 120px;">รหัสโปรเจกต์</th>
+                                <th>ความสำคัญ</th>
+                                <th>ชื่อโปรเจกต์</th>
+                                <th>ผู้คุม (Owner)</th>
+                                <th>เริ่มงาน</th>
+                                <th>กำหนดส่ง</th>
+                                <th>สถานะ (วัน)</th>
+                                <th style="width: 25%;">สัดส่วนงานย่อย (Sub-Tasks)</th>
+                            </tr>
+                        </thead>
+                        <tbody id="tableProjectProgress"></tbody>
+                    </table>
+                </div>
+            </div>
+        </div>
+
+        <!-- กล่อง KPI -->
+        <div class="grid-2">
+            <div class="kpi-box" style="border-top:4px solid #3498db;">
+                <h3>📊 สถานะโปรเจกต์หลัก (Main)</h3>
+                <div style="display:flex; justify-content:space-around; margin-top:15px;">
+                    <div class="clickable" onclick="openListModal('main', 'active')"><div style="font-size:12px; color:#7f8c8d;">กำลังทำ</div><div class="kpi-value text-blue" id="kpiMainActive">0</div></div>
+                    <div class="clickable" onclick="openListModal('main', 'pending')"><div style="font-size:12px; color:#7f8c8d;">รอตรวจสอบ</div><div class="kpi-value text-orange" id="kpiMainPending">0</div></div>
+                    <div class="clickable" onclick="openListModal('main', 'overdue')"><div style="font-size:12px; color:#7f8c8d;">🚨 ล่าช้า</div><div class="kpi-value text-red" id="kpiMainOverdue">0</div><div style="font-size:11px; color:#c0392b; margin-top:-5px;" id="kpiMainOverduePercent"></div></div>
+                </div>
+            </div>
+            <div class="kpi-box" style="border-top:4px solid #27ae60;">
+                <h3>📋 สถานะงานย่อย (Sub-Tasks)</h3>
+                <div style="display:flex; justify-content:space-around; margin-top:15px;">
+                    <div class="clickable" onclick="openListModal('sub', 'active')"><div style="font-size:12px; color:#7f8c8d;">กำลังทำ</div><div class="kpi-value text-blue" id="kpiSubActive">0</div></div>
+                    <div class="clickable" onclick="openListModal('sub', 'pending')"><div style="font-size:12px; color:#7f8c8d;">รอตรวจสอบ</div><div class="kpi-value text-orange" id="kpiSubPending">0</div></div>
+                    <div class="clickable" onclick="openListModal('sub', 'overdue')"><div style="font-size:12px; color:#7f8c8d;">🚨 ล่าช้า</div><div class="kpi-value text-red" id="kpiSubOverdue">0</div><div style="font-size:11px; color:#c0392b; margin-top:-5px;" id="kpiSubOverduePercent"></div></div>
+                </div>
+            </div>
+        </div>
+
+        <!-- Performance -->
+        <div class="grid-2">
+            <div class="panel">
+                <div class="panel-header">📈 Performance: หัวหน้าโปรเจกต์ (Owner)</div>
+                <div class="table-responsive">
+                    <table class="table" style="min-width:400px;"><thead><tr><th>ชื่อพนักงาน</th><th>แผนก</th><th class="text-center">งานที่ค้าง (Active)</th><th class="text-center">เสร็จสิ้น (Done)</th></tr></thead><tbody id="tableOwnerStats"></tbody></table>
+                </div>
+            </div>
+            <div class="panel">
+                <div class="panel-header">📈 Performance: ผู้ปฏิบัติงาน (Sub-Task Assignee)</div>
+                <div class="table-responsive">
+                    <table class="table" style="min-width:400px;"><thead><tr><th>ชื่อพนักงาน</th><th>แผนก</th><th class="text-center">งานที่ค้าง (Active)</th><th class="text-center">เสร็จสิ้น (Done)</th></tr></thead><tbody id="tableSubStats"></tbody></table>
+                </div>
+            </div>
+        </div>
+      </div>
+
+      <div id="createView" class="container view-section">
+          <div class="panel">
+              <div class="panel-header">📝 สร้างโปรเจกต์ใหม่ (Main Project)</div>
+              <div class="grid-3">
+                  <div class="form-group"><label>ชื่องานหลัก</label><input type="text" id="mainTaskName" placeholder="เช่น ทำกราฟิกโปรโมชั่นเดือน 10"></div>
+                  <div class="form-group"><label>ผู้คุมโปรเจกต์ (Owner)</label><select id="mainAssignee"></select></div>
+                  <div class="form-group"><label>ผู้อนุมัติ (Approver) 👑</label><select id="mainApprover"></select></div>
+              </div>
+              <div class="grid-2">
+                  <div class="form-group"><label>แบรนด์</label><select id="mainBrand"></select></div>
+                  <div class="form-group"><label>หมวดหมู่งาน</label><select id="mainCategory"></select></div>
+              </div>
+              <div class="grid-2">
+                  <div class="form-group"><label>ความสำคัญ (Priority)</label><select id="mainPriority"></select></div>
+                  <div class="form-group"><label>สถานะเริ่มต้น</label><select id="mainTaskStatus"></select></div>
+              </div>
+              <div class="grid-2">
+                  <div class="form-group">
+                      <label>วันที่เริ่ม</label>
+                      <div style="display:flex; gap:5px;"><input type="text" id="mainStartDate" class="date-picker" style="flex:1;" placeholder="คลิกเลือกเวลา"><button type="button" class="btn" style="background:#e74c3c; color:white; padding:0 10px; border:none; border-radius:4px;" onclick="setNow(this)">ตอนนี้</button></div>
+                  </div>
+                  <div class="form-group">
+                      <label>กำหนดส่ง</label>
+                      <div style="display:flex; gap:5px;"><input type="text" id="mainDueDate" class="date-picker" style="flex:1;" placeholder="คลิกเลือกเวลา"><button type="button" class="btn" style="background:#e74c3c; color:white; padding:0 10px; border:none; border-radius:4px;" onclick="setNow(this)">ตอนนี้</button></div>
+                  </div>
+              </div>
+              <div class="grid-2">
+                  <div class="form-group"><label>ลิงก์ผลงานรวม (Result Link)</label><input type="text" id="mainResultLink" placeholder="วางลิงก์ Google Drive/Folder ของโปรเจกต์"></div>
+                  <!-- 🚨 เปลี่ยนเป็น Textarea -->
+                  <div class="form-group"><label>หมายเหตุ</label><textarea id="mainRemark" rows="2" placeholder="ข้อความเพิ่มเติม (ถ้ามี) กด Enter ขึ้นบรรทัดใหม่ได้" style="width:100%; border:1px solid #bdc3c7; border-radius:4px; padding:8px; box-sizing:border-box; font-family:inherit; resize:vertical; color:#000;"></textarea></div>
+              </div>
+          </div>
+          
+          <div class="panel">
+              <div class="panel-header"><span>📋 แตกงานย่อย (Sub-Tasks)</span></div>
+              <div id="subTasksContainer"></div>
+              <div style="margin-top: 15px;">
+                  <button class="btn btn-add" style="background: #eaf2f8; color: #2980b9; width: 100%; padding: 12px; font-size: 15px; border: 2px dashed #3498db; cursor: pointer; transition: 0.2s;" onclick="addSubTask()">➕ กดเพื่อแตกงานย่อยเพิ่ม</button>
+              </div>
+          </div>
+          <div style="text-align:right; margin-top:20px;">
+              <button class="btn" style="background:#27ae60; color:white; padding:12px 30px; font-size:16px; width:100%; max-width:300px;" onclick="submitData()" id="saveBtn">💾 บันทึกโปรเจกต์เข้าระบบ</button>
+          </div>
+      </div>
+
+      <div id="archiveView" class="container view-section">
+          <div class="panel">
+              <div class="panel-header" style="background:#2c3e50; color:white;">🗂️ แฟ้มเก็บงานที่ปิดจ็อบแล้ว (Archive)</div>
+              <div style="display:flex; border-bottom:2px solid #ecf0f1; margin-bottom:20px;">
+                  <button id="tabArchOwner" class="archive-tab active" onclick="switchArchiveTab('owner')">📂 โปรเจกต์ที่ฉันคุม (Owner)</button>
+                  <button id="tabArchSub" class="archive-tab" onclick="switchArchiveTab('sub')">📝 งานย่อยที่ฉันทำ (Assignee)</button>
+                  <button id="tabArchAppr" class="archive-tab" onclick="switchArchiveTab('appr')">✅ งานที่ฉันตรวจ (Approver)</button>
+                  <button id="tabArchAll" class="archive-tab" style="display:none;" onclick="switchArchiveTab('all')">👑 ผู้บริหาร (All Projects)</button>
+              </div>
+              <div id="archOwnerContent" class="archive-content" style="display:block;"><div id="archOwnerList" style="display:grid; grid-template-columns: repeat(auto-fill, minmax(300px, 1fr)); gap:15px;"></div></div>
+              <div id="archSubContent" class="archive-content" style="display:none;"><div id="archSubList" style="display:flex; flex-direction:column; gap:10px;"></div></div>
+              <div id="archApprContent" class="archive-content" style="display:none;"><div id="archApprList" style="display:flex; flex-direction:column; gap:10px;"></div></div>
+              <div id="archAllContent" class="archive-content" style="display:none;"><div id="archAllList" style="display:grid; grid-template-columns: repeat(auto-fill, minmax(300px, 1fr)); gap:15px;"></div></div>
+          </div>
+      </div>
+  </div>
+
+  <div id="listModal" class="modal-overlay">
+      <div class="modal-content" style="width: 100%; max-width: 500px;">
+          <div class="modal-header"><h3 class="modal-title" id="listModalTitle">รายการ</h3><button class="btn-close" onclick="closeListModal()">✖</button></div>
+          <div class="modal-body" id="listModalBody"></div>
+      </div>
+  </div>
+  
+  <div id="listModalMyTasks" class="modal-overlay">
+      <div class="modal-content" style="width: 100%; max-width: 500px;">
+          <div class="modal-header"><h3 class="modal-title" id="listModalTitleMyTasks">รายการ</h3><button class="btn-close" onclick="closeListModalMyTasks()">✖</button></div>
+          <div class="modal-body" id="listModalBodyMyTasks"></div>
+      </div>
+  </div>
+
+  <div id="taskModal" class="modal-overlay">
+      <div class="modal-content" style="width: 100%; max-width: 500px;">
+          <div class="modal-header"><h3 class="modal-title" id="modalTitle">รายละเอียดงาน</h3><button class="btn-close btn-close-modal" onclick="closeModal()">✖</button></div>
+          <div class="modal-body">
+              <div id="modalDate" style="color:#e74c3c; font-weight:bold; margin-bottom:15px;"></div>
+              <div style="background:#f4f6f7; padding:15px; border-radius:4px; margin-bottom:20px;"><h4 style="margin-top:0;">📋 รายละเอียด:</h4><div id="modalDesc" style="line-height:1.5; overflow-wrap: break-word;"></div></div>
+              <div style="text-align:right;"><button id="btnModalUpdateTask" class="btn" style="background:#3498db; color:white; padding:10px 20px; display:none; width:100%;">✏ อัปเดตการส่งงาน</button></div>
+          </div>
+      </div>
+  </div>
+
+  <div id="editSubTaskModal" class="modal-overlay">
+      <div class="modal-content" style="width: 100%; max-width: 500px;">
+          <div class="modal-header"><h3 class="modal-title">✏️ อัปเดตสถานะงาน: <span id="editSubCodeStr"></span></h3><button class="btn-close" onclick="closeEditModal()">✖</button></div>
+          <div class="modal-body">
+              <input type="hidden" id="editSubId">
+              <div class="form-group"><label>ชื่องาน</label><input type="text" id="editSubName" readonly style="background:#ecf0f1;"></div>
+              <div class="form-group"><label>สถานะงาน</label><select id="editSubStatus" style="font-weight:bold; color:#2980b9;"></select></div>
+              <div class="form-group"><label>ลิงก์ผลงาน (ถ้ามี)</label><div id="editSubLinkContainer"><input type="text" id="editSubLink" placeholder="วางลิงก์ Google Drive หรือลิงก์ที่เกี่ยวข้อง"></div></div>
+              
+              <!-- 🚨 เปลี่ยนหมายเหตุให้เป็น Textarea อัปเดตงานย่อยหลายบรรทัด -->
+              <div class="form-group">
+                  <label>หมายเหตุ</label>
+                  <textarea id="editSubRemark" rows="3" placeholder="พิมพ์ข้อความ... (สามารถกด Enter ขึ้นบรรทัดใหม่ได้)" style="width:100%; border:1px solid #bdc3c7; border-radius:4px; padding:8px; box-sizing:border-box; font-family:inherit; resize:vertical; color:#000;"></textarea>
+              </div>
+              
+              <button class="btn btn-save" style="width:100%; margin-top:15px;" onclick="saveSubTaskUpdate()" id="btnSaveUpdate">💾 บันทึกการอัปเดต</button>
+          </div>
+      </div>
+  </div>
+
+  <div id="manageProjectModal" class="modal-overlay">
+      <div class="modal-content" style="width: 100%; max-width: 850px; max-height: 90vh; display:flex; flex-direction:column;">
+          <div class="modal-header"><h3 class="modal-title">⚙ แก้ไขโปรเจกต์: <span id="manageProjCode"></span></h3><button class="btn-close" onclick="closeManageProject()">✖</button></div>
+          <div class="modal-body" style="overflow-y: auto; flex:1; padding: 15px;">
+              <input type="hidden" id="manageProjCodeInput">
+              <h4 style="margin-top:0; border-bottom:2px solid #ecf0f1; padding-bottom:5px; color:#2c3e50;">📌 1. ข้อมูลโปรเจกต์หลัก</h4>
+              <div class="grid-2"><div class="form-group"><label>ชื่องานหลัก</label><input type="text" id="editMainName"></div><div class="form-group"><label>ผู้คุมโปรเจกต์ (Owner)</label><select id="editMainAssignee"></select></div></div>
+              <div class="grid-2"><div class="form-group"><label>แบรนด์</label><select id="editMainBrand"></select></div><div class="form-group"><label>หมวดหมู่</label><select id="editMainCategory"></select></div></div>
+              <div class="grid-2"><div class="form-group"><label>ความสำคัญ</label><select id="editMainPriority"></select></div><div class="form-group"><label>สถานะหลัก</label><select id="editMainStatus"></select></div></div>
+              <div class="grid-2">
+                  <div class="form-group"><label>วันที่เริ่ม</label><div style="display:flex; gap:5px;"><input type="text" id="editMainStart" class="date-picker" style="flex:1;"><button type="button" class="btn" style="background:#e74c3c; color:white; padding:0 10px; border:none; border-radius:4px;" onclick="setNow(this)">ตอนนี้</button></div></div>
+                  <div class="form-group"><label>กำหนดส่งหลัก 🚩</label><div style="display:flex; gap:5px;"><input type="text" id="editMainDue" class="date-picker" style="flex:1;"><button type="button" class="btn" style="background:#e74c3c; color:white; padding:0 10px; border:none; border-radius:4px;" onclick="setNow(this)">ตอนนี้</button></div></div>
+              </div>
+              <div class="grid-2">
+                  <div class="form-group"><label>ลิงก์ผลงานรวม (Result Link)</label><input type="text" id="editMainResultLink" placeholder="วางลิงก์ผลงานรวม"></div>
+                  <!-- 🚨 เปลี่ยนหมายเหตุให้เป็น Textarea แก้ไขโปรเจกต์ -->
+                  <div class="form-group"><label>หมายเหตุ</label><textarea id="editMainRemark" rows="2" style="width:100%; border:1px solid #bdc3c7; border-radius:4px; padding:8px; box-sizing:border-box; font-family:inherit; resize:vertical; color:#000;"></textarea></div>
+              </div>
+
+              <h4 style="margin-top:20px; border-bottom:2px solid #ecf0f1; padding-bottom:5px; color:#2c3e50;">📋 2. จัดการงานย่อย (Sub-Tasks)</h4>
+              <div id="editSubTasksContainer"></div>
+              <button class="btn" style="background:#eaf2f8; color:#2980b9; width:100%; padding:12px; margin-top:15px; border:2px dashed #3498db; font-size: 15px; cursor: pointer; transition: 0.2s;" onclick="addEditSubTask()">➕ กดเพื่อแตกงานย่อยใหม่เพิ่ม</button>
+          </div>
+          <div style="padding: 15px; border-top: 2px solid #ecf0f1; text-align: right; background: #fdfdfd;">
+              <button class="btn btn-save" style="background:#f39c12; padding: 12px 20px; width:100%; font-size:16px;" onclick="saveFullProjectUpdate()" id="btnSaveFullUpdate">💾 บันทึกการเปลี่ยนแปลงทั้งหมด</button>
+          </div>
+      </div>
+  </div>
+
+  <?!= include('Script'); ?>
+</body>
+</html>
