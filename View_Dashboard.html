@@ -1,0 +1,112 @@
+<!-- Modal 1: โชว์รายการงานเมื่อกด KPI -->
+<div id="listModal" class="modal-overlay">
+    <div class="modal-content">
+        <div class="modal-header">
+            <h3 id="listModalTitle" class="modal-title">รายการ...</h3>
+            <button class="btn-close" onclick="closeListModal()">✖</button>
+        </div>
+        <div id="listModalBody" class="modal-body"></div>
+    </div>
+</div>
+
+<div id="dashboardView" class="container view-section active">
+    
+    <div class="filter-box">
+        <strong>📅 ตัวกรองข้อมูล:</strong>
+        <select id="filterPreset" onchange="handlePresetChange()">
+            <option value="all" selected>ทั้งหมด (All Time)</option>
+            <option value="thisMonth">เดือนนี้</option>
+            <option value="lastMonth">เดือนที่แล้ว</option>
+            <option value="thisYear">ปีนี้ทั้งหมด</option>
+            <option value="custom">กำหนดช่วงวันที่เอง...</option>
+        </select>
+        <span id="customDateContainer" style="display:none;"><input type="date" id="filterStart"> - <input type="date" id="filterEnd"></span>
+        <button class="btn-filter" onclick="applyFilter()">กรองข้อมูล</button>
+    </div>
+
+<!-- ================= KPI งานหลัก & งานย่อย (แบบแบ่งซ้ายขวา) ================= -->
+    <div class="kpi-master-grid">
+        
+        <!-- กรอบใหญ่ฝั่งซ้าย: โปรเจกต์หลัก -->
+        <div class="kpi-master-box" style="border-top: 5px solid #2980b9;">
+            <div class="kpi-master-title">📌 สถานะ: โปรเจกต์หลัก (Main Projects)</div>
+            <div class="kpi-inner-grid">
+                <div class="kpi-card" onclick="openListModal('main', 'active')" style="border-color: #3498db; padding: 15px 10px;">
+                    <h4>กำลังทำ</h4><p class="num" id="kpiMainActive" style="color:#2980b9;">0</p>
+                </div>
+                <div class="kpi-card" onclick="openListModal('main', 'pending')" style="border-color: #f1c40f; padding: 15px 10px;">
+                    <h4>รอตรวจสอบ</h4><p class="num" id="kpiMainPending" style="color:#f39c12;">0</p>
+                </div>
+                <div class="kpi-card" onclick="openListModal('main', 'overdue')" style="border-color: #e74c3c; background: #fff5f5; padding: 15px 10px;">
+                    <h4>🚨 เลยกำหนด</h4><p class="num" id="kpiMainOverdue" style="color:#c0392b;">0</p>
+                    <div class="kpi-percent" id="kpiMainOverduePercent" style="color:#c0392b;">(0% ค้าง)</div>
+                </div>
+                <div class="kpi-card" onclick="openListModal('main', 'unfinished')" style="border-color: #95a5a6; padding: 15px 10px;">
+                    <h4>รวมที่ยังไม่จบ</h4><p class="num" id="kpiMainUnfinished">0</p>
+                </div>
+            </div>
+        </div>
+
+        <!-- กรอบใหญ่ฝั่งขวา: งานย่อย -->
+        <div class="kpi-master-box" style="border-top: 5px solid #e67e22;">
+            <div class="kpi-master-title">📌 สถานะ: งานย่อย (Sub-Tasks)</div>
+            <div class="kpi-inner-grid">
+                <div class="kpi-card" onclick="openListModal('sub', 'active')" style="border-color: #3498db; padding: 15px 10px;">
+                    <h4>กำลังทำ</h4><p class="num" id="kpiSubActive" style="color:#2980b9;">0</p>
+                </div>
+                <div class="kpi-card" onclick="openListModal('sub', 'pending')" style="border-color: #f1c40f; padding: 15px 10px;">
+                    <h4>รอตรวจสอบ</h4><p class="num" id="kpiSubPending" style="color:#f39c12;">0</p>
+                </div>
+                <div class="kpi-card" onclick="openListModal('sub', 'overdue')" style="border-color: #e74c3c; background: #fff5f5; padding: 15px 10px;">
+                    <h4>🚨 เลยกำหนด</h4><p class="num" id="kpiSubOverdue" style="color:#c0392b;">0</p>
+                    <div class="kpi-percent" id="kpiSubOverduePercent" style="color:#c0392b;">(0% ค้าง)</div>
+                </div>
+                <div class="kpi-card" onclick="openListModal('sub', 'unfinished')" style="border-color: #95a5a6; padding: 15px 10px;">
+                    <h4>รวมที่ยังไม่จบ</h4><p class="num" id="kpiSubUnfinished">0</p>
+                </div>
+            </div>
+        </div>
+        
+    </div>
+    
+    <!-- สถิติรายเดือน -->
+    <div class="section-title">📊 สถิติช่วงเวลาที่เลือก (Performance)</div>
+    <div class="kpi-grid" style="grid-template-columns: 1fr 1fr;">
+        <div class="kpi-card" onclick="openListModal('perf', 'created')" style="border-color: #9b59b6;">
+            <h4>โปรเจกต์ที่กรองเจอ (ตามช่วงเวลา)</h4><p class="num" id="kpiCreated" style="color:#8e44ad;">0</p>
+        </div>
+        <div class="kpi-card" onclick="openListModal('perf', 'completed')" style="border-color: #2ecc71;">
+            <h4>โปรเจกต์ที่ทำเสร็จ (ปิดจ็อบ)</h4><p class="num" id="kpiCompleted" style="color:#27ae60;">0</p>
+        </div>
+    </div>
+
+    <!-- ตารางพนักงาน -->
+    <div class="dashboard-layout">
+        <div class="panel">
+            <div class="panel-header">👤 ภาพรวมหัวหน้าโปรเจกต์ (Owner)</div>
+            <table><thead><tr><th>พนักงาน</th><th>แผนก</th><th class="text-center">ค้างอยู่</th><th class="text-center" title="เสร็จในช่วงเวลาที่กรอง">ปิดจ็อบแล้ว</th></tr></thead><tbody id="tableOwnerStats"></tbody></table>
+        </div>
+        <div class="panel">
+            <div class="panel-header">⚙️ ภาพรวมคนทำงานย่อย (Assignee)</div>
+            <table><thead><tr><th>พนักงาน</th><th>แผนก</th><th class="text-center">ค้างอยู่</th><th class="text-center" title="เสร็จในช่วงเวลาที่กรอง">ปิดจ็อบแล้ว</th></tr></thead><tbody id="tableSubStats"></tbody></table>
+        </div>
+    </div>
+
+    <!-- ตารางความคืบหน้า -->
+    <div class="panel">
+        <div class="panel-header">🚀 ความคืบหน้าโปรเจกต์ทีม (อิงจากงานย่อย)</div>
+        <div class="legend" style="margin-bottom: 15px; padding: 10px; background: #f8f9fa; border-radius: 5px; border: 1px dashed #bdc3c7;">
+            <div class="legend-item"><div class="legend-color seg-white"></div>ยังไม่ต้องดำเนินการ</div>
+            <div class="legend-item"><div class="legend-color seg-gray"></div>ยังไม่ได้ทำ</div>
+            <div class="legend-item"><div class="legend-color seg-blue"></div>กำลังทำ</div>
+            <div class="legend-item"><div class="legend-color seg-lgreen"></div>เสร็จสิ้น (รอตรวจ)</div>
+            <div class="legend-item"><div class="legend-color seg-dgreen"></div>เสร็จและตรวจแล้ว</div>
+            <div class="legend-item"><div class="legend-color seg-orange"></div>ปฏิเสธ/แก้ไข</div>
+            <div class="legend-item"><div class="legend-color seg-red"></div>🚨 <b>เลยกำหนด</b></div>
+        </div>
+        <table>
+            <thead><tr><th width="12%">รหัสงาน</th><th width="25%">ชื่องาน</th><th width="15%">หัวหน้า</th><th width="15%">กำหนดเสร็จ</th><th width="33%">สถานะงานย่อย</th></tr></thead>
+            <tbody id="tableProjectProgress"><tr><td colspan="5" class="loading">กำลังซิงก์ข้อมูล...</td></tr></tbody>
+        </table>
+    </div>
+</div>
