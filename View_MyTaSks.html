@@ -1,0 +1,193 @@
+<!-- Modal 2: ดูรายละเอียดงาน -->
+<div id="taskModal" class="modal-overlay">
+    <div class="modal-content" style="width: 450px;">
+        <h3 id="modalTitle" class="modal-title" style="margin-top:0; border-bottom: 2px solid #ecf0f1; padding-bottom: 10px;">ชื่องาน</h3>
+        <div style="font-size:12px; color:#7f8c8d;" id="modalDate">กำหนดส่ง: </div>
+        <div id="modalDesc" class="modal-desc">รายละเอียด...</div>
+        <div style="display: flex; justify-content: space-between; align-items: center; margin-top: 15px;">
+            <button id="btnModalUpdateTask" class="btn" style="background: #3498db; color: white; padding: 10px 15px; display: none;">✏️ อัปเดตส่งงาน</button>
+            <button class="btn-close-modal" style="float: none; margin-left: auto;" onclick="closeModal()">ปิดหน้าต่าง</button>
+        </div>
+    </div>
+</div>
+
+<!-- Modal 3: อัปเดตงานย่อย -->
+<div id="editSubTaskModal" class="modal-overlay">
+    <div class="modal-content" style="width: 500px;">
+        <div class="modal-header">
+            <h3 class="modal-title">✏️ อัปเดตงาน: <span id="editSubCodeStr"></span></h3>
+            <button class="btn-close" onclick="closeEditModal()">✖</button>
+        </div>
+        <div class="modal-body">
+            <input type="hidden" id="editSubId">
+            <div class="form-group">
+                <label>ชื่องานย่อย 🔒 <span style="font-size:11px; color:#e74c3c; font-weight:normal;">(ไม่อนุญาตให้แก้ไข)</span></label>
+                <input type="text" id="editSubName" readonly style="background-color: #f4f6f7; color: #7f8c8d; cursor: not-allowed; border-color: #e1e8ed;">
+            </div>
+            <div class="form-group">
+                <label>สถานะงาน</label>
+                <select id="editSubStatus"></select>
+            </div>
+            <div class="form-group">
+                <label>ลิงก์ผลงาน (Result Link)</label>
+                <input type="text" id="editSubLink" placeholder="วางลิงก์ Google Drive หรืออื่นๆ">
+            </div>
+            <div class="form-group">
+                <label>หมายเหตุ</label>
+                <input type="text" id="editSubRemark" placeholder="ข้อความเพิ่มเติม (ถ้ามี)">
+            </div>
+            <button class="btn btn-save" style="margin-top: 10px; width: 100%;" onclick="saveSubTaskUpdate()" id="btnSaveUpdate">บันทึกการอัปเดต</button>
+        </div>
+    </div>
+</div>
+
+<!-- Modal 4: จัดการ/แก้ไขโปรเจกต์เต็มรูปแบบ -->
+<div id="manageProjectModal" class="modal-overlay">
+    <div class="modal-content" style="width: 850px; max-height: 90vh; display:flex; flex-direction:column;">
+        <div class="modal-header">
+            <h3 class="modal-title">⚙️ แก้ไขโปรเจกต์: <span id="manageProjCode"></span></h3>
+            <button class="btn-close" onclick="closeManageProject()">✖</button>
+        </div>
+        <div class="modal-body" style="overflow-y: auto; flex:1; padding: 15px;">
+            <input type="hidden" id="manageProjCodeInput">
+            
+            <h4 style="margin-top:0; border-bottom:2px solid #ecf0f1; padding-bottom:5px; color:#2c3e50;">📌 1. ข้อมูลโปรเจกต์หลัก</h4>
+            <div class="grid-2">
+                <div class="form-group"><label>ชื่องานหลัก</label><input type="text" id="editMainName"></div>
+                <div class="form-group"><label>ผู้คุมโปรเจกต์ (Owner)</label><select id="editMainAssignee"></select></div>
+            </div>
+            <div class="grid-4">
+                <div class="form-group"><label>แบรนด์</label><select id="editMainBrand"></select></div>
+                <div class="form-group"><label>หมวดหมู่</label><select id="editMainCategory"></select></div>
+                <div class="form-group"><label>ความสำคัญ</label><select id="editMainPriority"></select></div>
+                <div class="form-group"><label>สถานะหลัก</label><select id="editMainStatus"></select></div>
+            </div>
+            <div class="grid-2">
+                <div class="form-group">
+                    <label>วันที่เริ่ม</label>
+                    <div style="display:flex; gap:5px;"><input type="text" id="editMainStart" class="date-picker" style="flex:1;"><button type="button" class="btn" style="background:#ecf0f1; padding:0 10px;" onclick="setNow(this)">ตอนนี้</button></div>
+                </div>
+                <div class="form-group">
+                    <label>กำหนดส่งหลัก 🚩</label>
+                    <div style="display:flex; gap:5px;"><input type="text" id="editMainDue" class="date-picker" style="flex:1;"><button type="button" class="btn" style="background:#ecf0f1; padding:0 10px;" onclick="setNow(this)">ตอนนี้</button></div>
+                </div>
+            </div>
+            <div class="grid-2">
+                <div class="form-group"><label>ลิงก์ผลงานรวม (Result Link)</label><input type="text" id="editMainResultLink" placeholder="วางลิงก์ผลงานรวม"></div>
+                <div class="form-group"><label>หมายเหตุ</label><input type="text" id="editMainRemark"></div>
+            </div>
+
+            <h4 style="margin-top:20px; border-bottom:2px solid #ecf0f1; padding-bottom:5px; color:#2c3e50;">📋 2. จัดการงานย่อย (Sub-Tasks)</h4>
+            <div id="editSubTasksContainer">
+                <!-- โหลดงานย่อยเก่า และงานงอกใหม่ มาตรงนี้ -->
+            </div>
+            
+            <button class="btn" style="background:#eaf2f8; color:#2980b9; width:100%; padding:12px; margin-top:15px; border:2px dashed #3498db; font-size: 15px; cursor: pointer; transition: 0.2s;" onclick="addEditSubTask()">➕ กดเพื่อแตกงานย่อยใหม่เพิ่ม</button>
+
+        </div>
+        <div style="padding: 15px; border-top: 2px solid #ecf0f1; text-align: right; background: #fdfdfd;">
+            <button class="btn btn-save" style="background:#f39c12; padding: 12px 20px; width: 100%; font-size:16px;" onclick="saveFullProjectUpdate()" id="btnSaveFullUpdate">💾 บันทึกการเปลี่ยนแปลงทั้งหมด</button>
+        </div>
+    </div>
+</div>
+
+<!-- 🚨 Modal 5: รายการลิสต์ (ตั้งชื่อ ID ใหม่ ไม่ให้ตีกับหน้าอื่น) -->
+<div id="listModalMyTasks" class="modal-overlay">
+    <div class="modal-content" style="width: 550px; max-height: 80vh; display: flex; flex-direction: column;">
+        <div class="modal-header" style="display: flex; justify-content: space-between; align-items: center; border-bottom: 2px solid #ecf0f1; padding-bottom: 10px;">
+            <h3 id="listModalTitleMyTasks" class="modal-title" style="margin:0; color:#2c3e50;">รายการ...</h3>
+            <button type="button" class="btn-close" style="background: none; border: none; font-size: 20px; cursor: pointer; color: #7f8c8d;" onclick="closeListModalMyTasks()">✖</button>
+        </div>
+        <div id="listModalBodyMyTasks" style="overflow-y: auto; flex: 1; margin-top: 15px;"></div>
+        <div style="margin-top: 20px; text-align: right; border-top: 2px solid #ecf0f1; padding-top: 10px;">
+            <button type="button" class="btn" style="background: #bdc3c7; color: white; padding: 8px 20px;" onclick="closeListModalMyTasks()">ปิดหน้าต่าง</button>
+        </div>
+    </div>
+</div>
+
+<!-- ========================================== -->
+<!-- โครงสร้างหลัก หน้างานของฉัน -->
+<!-- ========================================== -->
+<div id="myTasksView" class="container view-section">
+    <div class="my-task-header" style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 20px;">
+        <h2 style="margin: 0; color: #2c3e50;">สวัสดี 👋 <span id="displayUserName" style="color:#2980b9;">คุณ...</span></h2>
+        <div>
+            <label style="font-size:12px; color:#7f8c8d;">จำลองมุมมองของ:</label>
+            <select id="userSelector" class="user-selector form-control" style="width:200px; border:2px solid #3498db;" onchange="renderMyTasks()"><option value="">-- โหลดรายชื่อ --</option></select>
+        </div>
+    </div>
+
+    <!-- ส่วนที่ 1: KPI งานค้าง -->
+    <div class="grid-3" style="margin-bottom: 20px;">
+        <div class="kpi-card" onclick="openMyTasksKPI('owner')" style="border-color: #2c3e50; cursor: pointer; transition: transform 0.2s;">
+            <h4>โปรเจกต์ที่ฉันคุม (ค้างอยู่)</h4><p class="num" id="myProjCount">0</p>
+        </div>
+        <div class="kpi-card" onclick="openMyTasksKPI('assignee')" style="border-color: #e67e22; cursor: pointer; transition: transform 0.2s;">
+            <h4>งานย่อยที่ฉันต้องทำ (ค้างอยู่)</h4><p class="num" id="mySubCount">0</p>
+        </div>
+        <div class="kpi-card" onclick="openMyTasksKPI('my_overdue')" style="border-color: #e74c3c; background: #fff5f5; cursor: pointer; transition: transform 0.2s;">
+            <h4>🚨 เลยกำหนดส่ง</h4><p class="num" style="color: #c0392b;" id="myOverdueCount">0</p>
+        </div>
+    </div>
+
+    <!-- ส่วนที่ 2: ตารางประสิทธิภาพการทำงาน -->
+    <div class="panel" style="margin-bottom: 20px; padding: 15px;">
+        <div class="panel-header" style="display:flex; justify-content:space-between; align-items:center; margin-bottom: 10px; border:none;">
+            <span>🚀 ประสิทธิภาพการเคลียร์งานสัปดาห์นี้ (Weekly Productivity)</span>
+            <span style="font-size:11px; color:#7f8c8d; font-weight:normal; background:#f0f2f5; padding:4px 8px; border-radius:4px;">↔️ เลื่อนซ้ายขวาได้</span>
+        </div>
+        <div class="table-responsive">
+            <table class="table-perf" style="width: 100%;">
+                <thead>
+                    <tr>
+                        <th width="15%">วันที่ (Day)</th>
+                        <th width="15%">🎯 เป้าหมายงาน</th>
+                        <th width="15%">✅ เสร็จแล้ว</th>
+                        <th width="15%">⏳ กำลังทำ</th>
+                        <th width="15%">🚨 เลยกำหนด</th>
+                        <th width="25%">⚡ ประสิทธิภาพ</th>
+                    </tr>
+                </thead>
+                <tbody id="weeklyPerfTable">
+                    <tr><td colspan="6" class="loading text-center">กำลังดึงข้อมูลคะแนน...</td></tr>
+                </tbody>
+            </table>
+        </div>
+    </div>
+
+    <!-- ส่วนที่ 3: ปฏิทิน & Timeline -->
+    <div class="grid-2" style="margin-bottom: 20px;">
+        <div class="panel calendar-wrapper">
+            <h4 style="margin:0 0 10px 0; color:#2c3e50;">📅 ปฏิทินเดือนนี้</h4>
+            <div class="calendar-grid"><div class="cal-day">อา</div><div class="cal-day">จ</div><div class="cal-day">อ</div><div class="cal-day">พ</div><div class="cal-day">พฤ</div><div class="cal-day">ศ</div><div class="cal-day">ส</div></div>
+            <div class="calendar-grid" id="miniCalendarDates"></div>
+        </div>
+        <div class="panel">
+            <h4 style="margin:0 0 10px 0; color:#2c3e50;">⏳ Timeline งานใกล้ถึงกำหนด</h4>
+            <div class="timeline-container" id="upcomingTimeline"></div>
+        </div>
+    </div>
+
+    <!-- ส่วนที่ 4: รายการโปรเจกต์ งานที่รอตรวจ และงานย่อย -->
+    <div class="grid-3" style="display: grid; grid-template-columns: repeat(3, 1fr); gap: 20px;">
+        
+        <!-- กล่องที่ 1: โปรเจกต์ที่ฉันคุม -->
+        <div class="panel">
+            <div class="panel-header">📂 โปรเจกต์ที่ฉันคุมอยู่ (Owner)</div>
+            <div id="myProjectsList"></div>
+        </div>
+
+        <!-- 🚨 กล่องที่ 2 (มาใหม่): งานรออนุมัติ 🚨 -->
+        <div class="panel" style="border-top: 4px solid #f39c12;">
+            <div class="panel-header" style="color: #d35400;">✅ งานที่รอฉันตรวจ (Approvals)</div>
+            <div id="myApprovalsList"><div class="loading text-center">กำลังโหลดข้อมูล...</div></div>
+        </div>
+
+        <!-- กล่องที่ 3: งานย่อยที่ฉันต้องทำ -->
+        <div class="panel" style="background: #f4f6f7; border: 1px solid #e1e8ed;">
+            <div class="panel-header" style="border-color: #d5dbdb;">📝 งานย่อยที่ต้องทำ (To-Do)</div>
+            <div id="myTodosList"></div>
+        </div>
+        
+    </div>
+</div>
