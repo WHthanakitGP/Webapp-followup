@@ -1,0 +1,810 @@
+<script>
+    let rawData = []; let modalDataLists = { main: { active: [], pending: [], overdue: [], unfinished: [] }, sub: { active: [], pending: [], overdue: [], unfinished: [] }, perf: { created: [], completed: [] }, mytasks: { owner: [], assignee: [], my_overdue: [] } };
+    let globalDropdowns = { brand: [], category: [], priority: [], taskStatus: [], employees: {}, subCategory: [], subTaskStatus: [], approvers: [] };
+    let userAuth = { overview: "NO", personal: "PERSONAL", add: "NO", name: "" }; 
+
+    window.onload = function() { 
+        try { 
+            initDatePickers(); 
+            loadSettingsDropdown(); 
+        } catch (e) { alert("🚨 Error โหลดหน้าแรก: " + e.message); } 
+    };
+
+    function escapeInlineStr(str) { return String(str || "").replace(/\\/g, "\\\\").replace(/'/g, "\\'").replace(/"/g, "&quot;").replace(/\r/g, "").replace(/\n/g, "<br>"); }
+    
+    // 🚨 ควบคุมการเปิดปิด Dropdown แบบหลายรายชื่อ
+    function toggleMultiSelect(container, event) { document.querySelectorAll('.multi-select-dropdown').forEach(el => { if (el !== container.querySelector('.multi-select-dropdown')) el.classList.remove('show'); }); container.querySelector('.multi-select-dropdown').classList.toggle('show'); event.stopPropagation(); }
+    document.addEventListener('click', function(e) { if(!e.target.closest('.multi-select-container')) { document.querySelectorAll('.multi-select-dropdown').forEach(el => el.classList.remove('show')); } });
+    function updateMultiSelectText(checkbox) { let container = checkbox.closest('.multi-select-container'); let checked = Array.from(container.querySelectorAll('.sub-assign-cb:checked')).map(cb => cb.value); let textSpan = container.querySelector('.selected-text'); if(checked.length === 0) { textSpan.innerText = "-- เลือกผู้รับผิดชอบ --"; textSpan.style.color = "#7f8c8d"; } else if(checked.length <= 2) { textSpan.innerText = checked.join(', '); textSpan.style.color = "#2c3e50"; } else { textSpan.innerText = `เลือกแล้ว ${checked.length} คน`; textSpan.style.color = "#2980b9"; textSpan.style.fontWeight = "bold"; } }
+
+    // 🚨 ยืนยันการบังคับปฏิทิน ไม่ให้มือถือแทรกแซง
+    function initDatePickers() { try { document.querySelectorAll(".date-picker").forEach(el => { if(!el._flatpickr) { flatpickr(el, { enableTime: true, time_24hr: true, dateFormat: "d/m/Y H:i", locale: "th", disableMobile: true }); } }); bindMainDateEvent('mainDueDate', '#subTasksContainer .sub-due'); bindMainDateEvent('editMainDue', '#editSubTasksContainer .sub-due'); bindMainDateEvent('manageDueDate', '#extraSubTasksContainer .sub-due'); } catch(e) { console.error(e); } }
+    
+    function bindMainDateEvent(mainId, subSelector) { let mainEl = document.getElementById(mainId); if(mainEl && mainEl._flatpickr) { if(mainEl._flatpickr.selectedDates.length > 0) { let maxD = mainEl._flatpickr.selectedDates[0]; document.querySelectorAll(subSelector).forEach(subEl => { if(subEl._flatpickr) subEl._flatpickr.set('maxDate', maxD); }); } if(!mainEl.dataset.eventBound) { mainEl._flatpickr.config.onChange.push(function(selectedDates) { let maxD = selectedDates[0] || null; document.querySelectorAll(subSelector).forEach(subEl => { if(subEl._flatpickr) subEl._flatpickr.set('maxDate', maxD); }); }); mainEl.dataset.eventBound = "true"; } } }
+    const safeCompare = (str1, str2) => { return (str1 || "").toString().replace(/\s+/g, '').toLowerCase() === (str2 || "").toString().replace(/\s+/g, '').toLowerCase() && (str1 || "").toString().trim() !== ""; };
+    function setNow(btnEl) { let inputEl = btnEl.previousElementSibling; if(inputEl && inputEl._flatpickr) { let now = new Date(); inputEl._flatpickr.setDate(now, true); } }
+    function parseDate(dateStr) { if(!dateStr || dateStr === '-') return new Date(9999, 0, 1); try { let str = dateStr.toString().trim(); let d = new Date(str); if (!isNaN(d.getTime()) && str.includes('T')) return d; let parts = str.split(/[ \T]/); let dmy = parts[0].split(/[\/-]/); if(dmy.length === 3) { let y = parseInt(dmy[2]); if(y > 2500) y -= 543; let m = parseInt(dmy[1]) - 1; let date = parseInt(dmy[0]); if(m >= 12) { let t = m+1; m = date-1; date = t; } if(date > 1000) { y = date; if(y > 2500) y -= 543; date = parseInt(dmy[2]); } let time = parts[1] ? parts[1].split(':') : [0,0]; let hh = parseInt(time[0]) || 0; let mm = parseInt(time[1]) || 0; let fDate = new Date(y, m, date, hh, mm); if (!isNaN(fDate.getTime())) return fDate; } return new Date(9999, 0, 1); } catch(e) { return new Date(9999, 0, 1); } }
+    function getCountdownText(dateObj) { let now = new Date(); let diffMs = dateObj - now; let isOverdue = diffMs < 0; let absDiff = Math.abs(diffMs); let days = Math.floor(absDiff / (1000 * 60 * 60 * 24)); let hours = Math.floor((absDiff % (1000 * 60 * 60 * 24)) / (1000 * 60 * 60)); let mins = Math.floor((absDiff % (1000 * 60 * 60)) / (1000 * 60)); if (isOverdue) { return days > 0 ? `<span style="color:#c0392b; font-weight:bold; margin-left:8px;">(🚨 ล่าช้า ${days} วัน ${hours} ชม.)</span>` : (hours > 0 ? `<span style="color:#c0392b; font-weight:bold; margin-left:8px;">(🚨 ล่าช้า ${hours} ชม. ${mins} นาที)</span>` : `<span style="color:#c0392b; font-weight:bold; margin-left:8px;">(🚨 ล่าช้า ${mins} นาที)</span>`); } else { return days > 0 ? `<span style="color:#27ae60; font-weight:bold; margin-left:8px;">(⏳ เหลือ ${days} วัน ${hours} ชม.)</span>` : (hours > 0 ? `<span style="color:#e67e22; font-weight:bold; margin-left:8px;">(⏳ เหลือ ${hours} ชม. ${mins} นาที)</span>` : `<span style="color:#e74c3c; font-weight:bold; margin-left:8px;">(⏳ เหลือ ${mins} นาที!)</span>`); } }
+
+    function switchView(viewId, btnId) { document.querySelectorAll('.view-section').forEach(el => el.classList.remove('active')); document.querySelectorAll('.navbar button').forEach(el => el.classList.remove('active')); let targetView = document.getElementById(viewId); let targetBtn = document.getElementById(btnId); if(targetView) targetView.classList.add('active'); if(targetBtn) targetBtn.classList.add('active'); if(viewId === 'myTasksView') renderMyTasks(); if(viewId === 'archiveView') renderArchive(); if(viewId === 'createView') resetCreateForm(); }
+    function resetCreateForm() { let elName = document.getElementById('mainTaskName'); if(elName) elName.value = ''; let elBrand = document.getElementById('mainBrand'); if(elBrand) elBrand.selectedIndex = 0; let elCat = document.getElementById('mainCategory'); if(elCat) elCat.selectedIndex = 0; let elPri = document.getElementById('mainPriority'); if(elPri) elPri.selectedIndex = 0; let elAss = document.getElementById('mainAssignee'); if(elAss) elAss.selectedIndex = 0; let elAppr = document.getElementById('mainApprover'); if(elAppr) elAppr.selectedIndex = 0; let elLink = document.getElementById('mainResultLink'); if(elLink) elLink.value = ''; let elRem = document.getElementById('mainRemark'); if(elRem) elRem.value = ''; document.querySelectorAll('#createView input.date-picker').forEach(el => { if(el._flatpickr) el._flatpickr.clear(); }); let subCont = document.getElementById('subTasksContainer'); if(subCont) { subCont.innerHTML = ''; addSubTask(); } }
+    function closeModal() { document.getElementById('taskModal').style.display = 'none'; }
+    function closeListModal() { document.getElementById('listModal').style.display = 'none'; }
+    function closeListModalMyTasks() { document.getElementById('listModalMyTasks').style.display = 'none'; }
+    function closeManageProject() { document.getElementById('manageProjectModal').style.display = 'none'; document.getElementById('editSubTasksContainer').innerHTML = ''; }
+
+    function showProjectOverview(projCode) {
+        let proj = rawData.find(p => p.code === projCode); if(!proj) return;
+        document.getElementById('listModalTitleMyTasks').innerText = `👁️ ภาพรวมโปรเจกต์: ${projCode}`;
+        
+        let html = `
+        <div style="background:#f4f6f7; padding:12px; border-radius:6px; margin-bottom:15px; border-left:4px solid #3498db; font-size:13px;">
+            <h4 style="margin:0 0 8px 0; color:#2c3e50;">${proj.name}</h4>
+            <div style="margin-bottom:4px;">👤 <strong>ผู้คุม (Owner):</strong> ${proj.owner}</div>
+            <div style="margin-bottom:4px;">🚩 <strong>กำหนดส่งหลัก:</strong> ${proj.dueDate}</div>
+            <div style="margin-bottom:4px;">📌 <strong>สถานะหลัก:</strong> ${proj.status}</div>
+            <div style="margin-bottom:4px;">📝 <strong>หมายเหตุ:</strong> ${proj.remark ? proj.remark.replace(/\n/g, '<br>') : '-'}</div>
+            <div>🔗 <strong>ลิงก์ผลงานรวม:</strong> ${proj.resultLink ? `<a href="${proj.resultLink}" target="_blank" style="color:#3498db; text-decoration:none; font-weight:bold;">คลิกดูผลงาน</a>` : '-'}</div>
+        </div>
+        <h4 style="border-bottom: 2px solid #ecf0f1; padding-bottom: 5px; margin-bottom:10px; color:#2c3e50;">📋 งานย่อยทั้งหมดในโปรเจกต์นี้</h4>`;
+        
+        proj.subTasks.forEach(sub => {
+            let isDone = (sub.status || "").includes('เสร็จ'); let borderCol = isDone ? '#27ae60' : '#f39c12'; let bgCol = isDone ? '#f9fff9' : '#fff';
+            let linkHtml = (sub.resultLink && sub.resultLink.trim() !== "") ? `<div style="margin-top:6px;"><a href="${sub.resultLink}" target="_blank" style="display:inline-block; background:#9b59b6; color:white; padding:4px 8px; border-radius:4px; text-decoration:none; font-size:11px; font-weight:bold;">🔗 เปิดดูลิงก์ผลงานแนบ</a></div>` : '';
+            
+            // 🚨 แปลง \n เป็น <br> ให้โชว์หลายบรรทัด
+            let safeRemarkText = escapeInlineStr(sub.remark);
+            let remarkHtml = (sub.remark && sub.remark.trim() !== "") ? `<div style="color:#e67e22; font-size:11px; margin-top:2px;">💬 หมายเหตุ: <br>${safeRemarkText}</div>` : '';
+
+            html += `
+            <div style="background:${bgCol}; border: 1px solid #e1e8ed; border-left: 4px solid ${borderCol}; padding: 10px; margin-bottom: 8px; border-radius: 4px;">
+                <div style="font-weight:bold; color:#2c3e50; font-size:13px; margin-bottom:4px;">${sub.subName}</div>
+                <div style="font-size:12px; color:#7f8c8d; display:flex; flex-direction:column; gap:3px;">
+                    <div>👤 <strong>ผู้รับผิดชอบ:</strong> ${sub.assignee || '-'}</div>
+                    <div>📌 <strong>สถานะ:</strong> <span style="color:${borderCol}; font-weight:bold;">${sub.status}</span></div>
+                    <div>🚀 <strong>เริ่มงาน:</strong> ${sub.startDate || '-'}</div>
+                    <div>📅 <strong>กำหนดส่ง:</strong> ${sub.dueDate}</div>
+                    ${remarkHtml}
+                    ${linkHtml}
+                </div>
+            </div>`;
+        });
+        document.getElementById('listModalBodyMyTasks').innerHTML = html; document.getElementById('listModalMyTasks').style.display = 'flex';
+    }
+
+    function openListModal(type, category) { 
+        let typeName = ""; let catName = ""; if (type === 'main') typeName = 'โปรเจกต์หลัก'; else if (type === 'sub') typeName = 'งานย่อย'; else if (type === 'perf') typeName = 'สถิติ'; if(category === 'active') catName = "ที่กำลังทำอยู่"; else if(category === 'pending') catName = "ที่รอตรวจสอบ"; else if(category === 'overdue') catName = "ที่ 🚨 เลยกำหนดส่ง"; else if(category === 'unfinished') catName = "ที่ยังไม่เสร็จทั้งหมด"; else if(category === 'created') catName = "โปรเจกต์ทั้งหมดในช่วงเวลาที่กรอง"; else if(category === 'completed') catName = "โปรเจกต์ที่ปิดจ็อบแล้ว"; 
+        document.getElementById('listModalTitle').innerText = `${typeName}: ${catName}`; let listData = modalDataLists[type][category]; let html = "";
+        if(!listData || listData.length === 0) { html = `<div style="text-align:center; padding:30px; color:#7f8c8d;">ไม่มีข้อมูลในหมวดหมู่นี้ 🎉</div>`; } else { listData.forEach(item => { html += `<div class="list-item"><div><div class="list-title">[${item.code}] ${item.name}</div><div class="list-meta">${item.meta}</div></div></div>`; }); }
+        document.getElementById('listModalBody').innerHTML = html; document.getElementById('listModal').style.display = 'flex';
+    }
+    
+    function openMyTasksKPI(category) { 
+        let catName = ""; if(category === 'owner') catName = "โปรเจกต์ที่ฉันคุม (ค้างอยู่)"; else if(category === 'assignee') catName = "งานย่อยที่ฉันต้องทำ (ค้างอยู่)"; else if(category === 'my_overdue') catName = "🚨 เลยกำหนดส่ง";
+        document.getElementById('listModalTitleMyTasks').innerText = `งานของฉัน: ${catName}`; let listData = modalDataLists.mytasks[category]; let html = "";
+        if(!listData || listData.length === 0) { html = `<div style="text-align:center; padding:30px; color:#7f8c8d;">ไม่มีงานในหมวดหมู่นี้ 🎉</div>`; } else { listData.forEach(item => { html += `<div class="list-item"><div><div class="list-title">[${item.code}] ${item.name}</div><div class="list-meta">${item.meta}</div></div></div>`; }); }
+        document.getElementById('listModalBodyMyTasks').innerHTML = html; document.getElementById('listModalMyTasks').style.display = 'flex';
+    }
+
+    // 🚨 ฟังก์ชันใหม่: พับกางตารางเจาะลึก
+    function toggleOverviewTable() {
+        let container = document.getElementById('overviewTableContainer');
+        let icon = document.getElementById('overviewToggleIcon');
+        if(container.style.display === 'none') {
+            container.style.display = 'block';
+            icon.innerText = '▼';
+            icon.style.transform = 'rotate(0deg)';
+        } else {
+            container.style.display = 'none';
+            icon.innerText = '▶';
+            icon.style.transform = 'rotate(-90deg)';
+        }
+    }
+
+    // 🚨 อัปเดตดึงข้อมูล: ใส่รายชื่อแผนกและพนักงานลงในตัวกรองด้วย
+    function loadSettingsDropdown() {
+        google.script.run.withSuccessHandler(function(response) {
+            try {
+                if(!response || !response.auth.found) { document.body.innerHTML = '<div style="display:flex; height:100vh; justify-content:center; align-items:center; flex-direction:column; background:#ecf0f1; color:#2c3e50;"><h1 style="color:#e74c3c; font-size:40px; margin-bottom:10px;">🚫 ปฏิเสธการเข้าถึง</h1><h3>ไม่พบอีเมลของคุณในฐานข้อมูล Employees โปรดติดต่อหัวหน้างาน</h3></div>'; return; }
+                globalDropdowns = response.dropdowns || globalDropdowns; globalDropdowns.employees = response.employeesGrouped || {}; userAuth = response.auth || userAuth;
+                let navDash = document.getElementById('navDashboard'); if (navDash) navDash.style.display = (userAuth.overview === "YES") ? 'inline-block' : 'none';
+                let tabAll = document.getElementById('tabArchAll'); if (tabAll) tabAll.style.display = (userAuth.overview === "YES") ? 'inline-block' : 'none';
+                let createViewEl = document.getElementById('createView');
+                
+                if (userAuth.add !== "YES") { if(createViewEl) createViewEl.innerHTML = '<div class="panel" style="text-align:center; padding:80px 20px; color:#e74c3c;"><h2>🚫 ไม่มีสิทธิ์เข้าถึงหน้านี้</h2></div>'; } else {
+                    populateSelect('mainBrand', globalDropdowns.brand); populateSelect('mainCategory', globalDropdowns.category); populateSelect('mainPriority', globalDropdowns.priority);
+                    let allowedStatus = ["ยังไม่ได้เริ่ม", "กำลังทำ"]; document.getElementById('mainTaskStatus').innerHTML = allowedStatus.map(opt => `<option value="${opt}">${opt}</option>`).join('');
+                    let empHtml = '<option value="">-- เลือกพนักงาน --</option>'; for (let dept in globalDropdowns.employees) { empHtml += `<optgroup label="📂 ${dept}">`; globalDropdowns.employees[dept].forEach(name => { empHtml += `<option value="${name}">${name}</option>`; }); empHtml += `</optgroup>`; }
+                    let assignEl = document.getElementById('mainAssignee'); if(assignEl) assignEl.innerHTML = empHtml;
+                    let approveEl = document.getElementById('mainApprover'); if(approveEl) approveEl.innerHTML = '<option value="">-- เลือกผู้อนุมัติ --</option>' + (globalDropdowns.approvers || []).map(opt => `<option value="${opt}">${opt}</option>`).join('');
+                    let subCont = document.getElementById('subTasksContainer'); if(subCont && subCont.children.length === 0) addSubTask(); 
+                }
+                
+                let userSelEl = document.getElementById('userSelector');
+                if(userSelEl) {
+                    if (userAuth.personal === "ALL") { let userSelHtml = ''; for (let dept in globalDropdowns.employees) { userSelHtml += `<optgroup label="📂 ${dept}">`; globalDropdowns.employees[dept].forEach(name => { userSelHtml += `<option value="${name}">${name}</option>`; }); userSelHtml += `</optgroup>`; } userSelEl.innerHTML = userSelHtml; userSelEl.value = userAuth.name; userSelEl.disabled = false; } else { userSelEl.innerHTML = `<option value="${userAuth.name}">${userAuth.name}</option>`; userSelEl.value = userAuth.name; userSelEl.disabled = true; }
+                }
+
+                // 🚨 สร้างตัวกรองแผนกและพนักงานสำหรับหน้า Dashboard
+                let filterEmpHtml = '<option value="all">แสดงทุกคนทั้งหมด</option>';
+                for (let dept in globalDropdowns.employees) { 
+                    filterEmpHtml += `<optgroup label="📂 แผนก: ${dept}">`;
+                    filterEmpHtml += `<option value="DEPT:${dept}">👉 ดูงานทั้งแผนก ${dept}</option>`;
+                    globalDropdowns.employees[dept].forEach(name => { 
+                        filterEmpHtml += `<option value="${name}">${name}</option>`; 
+                    }); 
+                    filterEmpHtml += `</optgroup>`; 
+                }
+                let filterAssEl = document.getElementById('filterAssignee');
+                if(filterAssEl) filterAssEl.innerHTML = filterEmpHtml;
+
+                loadDashboard(true);
+            } catch(err) { alert("🚨 ข้อผิดพลาดในการจัดสิทธิ์: " + err.message); }
+        }).withFailureHandler(function(err){ alert("🚨 โหลดข้อมูลตั้งค่าไม่ได้: " + err.message); }).getSettingsDropdown(); 
+    }
+    
+    function populateSelect(elementId, optionsArray) { let el = document.getElementById(elementId); if(el && optionsArray) { el.innerHTML = optionsArray.map(opt => `<option value="${opt}">${opt}</option>`).join(''); } }
+
+    function loadDashboard(isFirstLoad = false) {
+        let progTable = document.getElementById('tableProjectProgress'); if(progTable) progTable.innerHTML = '<tr><td colspan="5" class="loading">กำลังซิงก์ข้อมูล...</td></tr>';
+        google.script.run.withSuccessHandler(function(data) { 
+            if (!data || !Array.isArray(data)) { rawData = []; } else { rawData = data; }
+            applyFilter(); renderMyTasks(); renderArchive(); 
+            if(isFirstLoad) { switchView('myTasksView', 'navMyTasks'); }
+        }).withFailureHandler(function(err) { alert("🚨 ไม่สามารถโหลดข้อมูลโปรเจกต์ได้: " + err.message); if(progTable) progTable.innerHTML = '<tr><td colspan="5" class="text-center" style="color:red;">โหลดข้อมูลล้มเหลว โปรดรีเฟรชหน้าเว็บ</td></tr>'; }).getDashboardData();
+    }
+
+    function handlePresetChange() {
+        const preset = document.getElementById('filterPreset').value; const customContainer = document.getElementById('customDateContainer'); const startInput = document.getElementById('filterStart'); const endInput = document.getElementById('filterEnd');
+        if (preset === 'all') { customContainer.style.display = 'none'; startInput.value = ''; endInput.value = ''; applyFilter(); return; }
+        if (preset === 'custom') { customContainer.style.display = 'inline-block'; return; }
+        customContainer.style.display = 'none'; const now = new Date(); const y = now.getFullYear(); const m = now.getMonth(); let start, end;
+        switch(preset) { case 'thisMonth': start = new Date(y, m, 1); end = new Date(y, m + 1, 0); break; case 'lastMonth': start = new Date(y, m - 1, 1); end = new Date(y, m, 0); break; case 'q1': start = new Date(y, 0, 1); end = new Date(y, 3, 0); break; case 'q2': start = new Date(y, 3, 1); end = new Date(y, 6, 0); break; case 'q3': start = new Date(y, 6, 1); end = new Date(y, 9, 0); break; case 'q4': start = new Date(y, 9, 1); end = new Date(y, 12, 0); break; case 'thisYear': start = new Date(y, 0, 1); end = new Date(y, 11, 31); break; }
+        startInput.value = new Date(start.getTime() + (7 * 60 * 60 * 1000)).toISOString().split('T')[0]; endInput.value = new Date(end.getTime() + (7 * 60 * 60 * 1000)).toISOString().split('T')[0]; applyFilter();
+    }
+
+    // 🚨 อัปเดตระบบกรอง: ทำงานครอบคลุมทั้ง Priority, Assignee/Dept และวันที่
+    function applyFilter() {
+        try {
+            let startInputEl = document.getElementById('filterStart'); let endInputEl = document.getElementById('filterEnd'); const sVal = startInputEl ? startInputEl.value : ""; const eVal = endInputEl ? endInputEl.value : "";
+            let startFilter = (sVal && !isNaN(new Date(sVal).getTime())) ? new Date(sVal) : new Date(1900, 0, 1); let endFilter = (eVal && !isNaN(new Date(eVal).getTime())) ? new Date(eVal) : new Date(9999, 11, 31); endFilter.setHours(23, 59, 59);
+
+            // ดึงค่าจากตัวกรองใหม่
+            const prioFilter = document.getElementById('filterPriority') ? document.getElementById('filterPriority').value : "all";
+            const empFilter = document.getElementById('filterAssignee') ? document.getElementById('filterAssignee').value : "all";
+
+            modalDataLists.main = { active: [], pending: [], overdue: [], unfinished: [] }; modalDataLists.sub = { active: [], pending: [], overdue: [], unfinished: [] }; modalDataLists.perf = { created: [], completed: [] };
+            let ownerStats = {}; let subStats = {}; let progressHtml = '';
+            
+            const now = new Date();
+            const tZero = new Date(); tZero.setHours(0,0,0,0);
+
+            let sortedProjects = (rawData || []).filter(p => p && p.code).sort((a, b) => String(a.code).localeCompare(String(b.code)));
+
+            sortedProjects.forEach(p => {
+                let pDate = parseDate(p.dueDate); 
+                let pStartDate = parseDate(p.startDate);
+                let prioText = p.priority || "-";
+                let ownerName = p.owner ? p.owner.toString().trim() : "ไม่ระบุ"; 
+                
+                // 🚨 เช็กเงื่อนไขการกรอง
+                let matchPrio = (prioFilter === "all" || prioText.includes(prioFilter));
+                let matchEmp = false;
+
+                if(empFilter === "all") {
+                    matchEmp = true;
+                } else if(empFilter.startsWith("DEPT:")) {
+                    let targetDept = empFilter.replace("DEPT:", "");
+                    if(globalDropdowns.employees[targetDept] && globalDropdowns.employees[targetDept].includes(ownerName)) matchEmp = true;
+                    (p.subTasks || []).forEach(sub => {
+                        let subAssArr = (sub.assignee || "").split(',').map(s=>s.trim());
+                        subAssArr.forEach(sa => {
+                            if(globalDropdowns.employees[targetDept] && globalDropdowns.employees[targetDept].includes(sa)) matchEmp = true;
+                        });
+                    });
+                } else {
+                    if(safeCompare(ownerName, empFilter)) matchEmp = true;
+                    (p.subTasks || []).forEach(sub => {
+                        let subAssArr = (sub.assignee || "").split(',').map(s=>s.trim().toLowerCase());
+                        if(subAssArr.includes(empFilter.toLowerCase())) matchEmp = true;
+                    });
+                }
+
+                // ถ้าไม่ตรงเงื่อนไขตัวกรองความสำคัญ หรือ พนักงาน ให้ข้ามไปเลย
+                if(!matchPrio || !matchEmp) return;
+
+                // --- นับ KPI ตามเงื่อนไขที่กรองผ่าน ---
+                let isMainFinished = (String(p.status).includes('เสร็จ') || String(p.status).toLowerCase().includes('done')); 
+                let isMainPending = (p.status === 'รอตรวจสอบ' || p.approvalStatus === 'รอตรวจสอบ'); 
+                
+                if(!isMainFinished) {
+                    modalDataLists.main.unfinished.push({ code: p.code, name: p.name, meta: 'กำหนดส่ง: ' + p.dueDate });
+                    if(isMainPending) { modalDataLists.main.pending.push({ code: p.code, name: p.name, meta: 'รอตรวจโดย: ' + ownerName }); } else { modalDataLists.main.active.push({ code: p.code, name: p.name, meta: 'หัวหน้า: ' + ownerName }); }
+                    let isMainOverdue = (pDate < now && !isMainFinished && !isMainPending);
+                    if(isMainOverdue) modalDataLists.main.overdue.push({ code: p.code, name: p.name, meta: '🚨 ล่าช้า! (กำหนดส่ง: ' + p.dueDate + ')' });
+                }
+                
+                let counts = { white: 0, gray: 0, blue: 0, lgreen: 0, dgreen: 0, orange: 0, red: 0, total: 0 };
+                (p.subTasks || []).forEach(sub => {
+                    counts.total++; let subDate = parseDate(sub.dueDate); let isSubFinished = (sub.status === 'เสร็จสิ้นและตรวจสอบแล้ว'); let isSubPending = (sub.status === 'เสร็จสิ้น (รอตรวจ)'); let isSubOverdue = (subDate < now && !isSubFinished && !isSubPending && sub.status !== 'Cancel');
+                    if(!isSubFinished) { let subItem = { code: sub.subCode, name: sub.subName, meta: `โปรเจกต์: [${p.code}] | กำหนดส่ง: ${sub.dueDate}` }; modalDataLists.sub.unfinished.push(subItem); if(isSubPending) { modalDataLists.sub.pending.push(subItem); } else { modalDataLists.sub.active.push(subItem); } if(isSubOverdue) modalDataLists.sub.overdue.push(subItem); }
+                    if(isSubOverdue) { counts.red++; } else { if(sub.status === 'ยังไม่ต้องดำเนินการ') counts.white++; else if(sub.status === 'ยังไม่ได้ทำ') counts.gray++; else if(sub.status === 'กำลังทำ' || sub.status === 'กำลังดำเนินการ') counts.blue++; else if(sub.status === 'เสร็จสิ้น (รอตรวจ)') counts.lgreen++; else if(sub.status === 'เสร็จสิ้นและตรวจสอบแล้ว') counts.dgreen++; else if(sub.status === 'ปฎิเสธ / แก้ไข') counts.orange++; else counts.gray++; }
+                    let subInRange = (subDate >= startFilter && subDate <= endFilter); 
+                    if(subInRange && sub.assignee) { let empList = sub.assignee.toString().split(','); empList.forEach(e => { let emp = e.trim(); if(emp !== "") { if(!subStats[emp]) subStats[emp] = { dept: "-", active: 0, done: 0 }; if(isSubFinished) subStats[emp].done++; else subStats[emp].active++; } }); }
+                });
+                
+                let inRange = (pDate >= startFilter && pDate <= endFilter);
+                if(inRange) {
+                    modalDataLists.perf.created.push({ code: p.code, name: p.name, meta: 'กำหนดส่ง: ' + p.dueDate + ' | คุมโดย: ' + ownerName }); if(isMainFinished) modalDataLists.perf.completed.push({ code: p.code, name: p.name, meta: 'ปิดจ็อบแล้ว | คุมโดย: ' + ownerName }); if(p.owner) { if(!ownerStats[ownerName]) ownerStats[ownerName] = { dept: "-", active: 0, done: 0 }; if(isMainFinished) ownerStats[ownerName].done++; else ownerStats[ownerName].active++; }
+                    
+                    let barHtml = ''; 
+                    if(counts.total > 0) { 
+                        const w = (val) => (val / counts.total) * 100 + '%'; 
+                        barHtml += `<div class="stacked-bar-container" style="display:flex; width:100%; height:14px; border-radius:4px; overflow:hidden; background:#ecf0f1; border:1px solid #2c3e50;">`; 
+                        if(counts.white > 0) barHtml += `<div style="width:${w(counts.white)}; background:#ffffff; border-right:1px solid #bdc3c7;" title="ยังไม่ต้องทำ: ${counts.white}"></div>`; 
+                        if(counts.gray > 0) barHtml += `<div style="width:${w(counts.gray)}; background:#bdc3c7; border-right:1px solid #95a5a6;" title="ยังไม่ได้ทำ: ${counts.gray}"></div>`; 
+                        if(counts.blue > 0) barHtml += `<div style="width:${w(counts.blue)}; background:#3498db;" title="กำลังทำ: ${counts.blue}"></div>`; 
+                        if(counts.orange > 0) barHtml += `<div style="width:${w(counts.orange)}; background:#f39c12;" title="ปฎิเสธ/แก้: ${counts.orange}"></div>`; 
+                        if(counts.lgreen > 0) barHtml += `<div style="width:${w(counts.lgreen)}; background:#2ecc71;" title="รอตรวจ: ${counts.lgreen}"></div>`; 
+                        if(counts.dgreen > 0) barHtml += `<div style="width:${w(counts.dgreen)}; background:#27ae60;" title="เสร็จสิ้น: ${counts.dgreen}"></div>`; 
+                        if(counts.red > 0) barHtml += `<div style="width:${w(counts.red)}; background:#e74c3c;" title="ล่าช้า: ${counts.red}"></div>`; 
+                        barHtml += `</div><div style="font-size:11px; color:#7f8c8d; margin-top:4px;">เสร็จ ${counts.dgreen}/${counts.total} งาน</div>`; 
+                    } else { barHtml = '<span style="color:#bdc3c7; font-size:11px;">ไม่มีงานย่อย</span>'; }
+                    
+                    let statusBadge = "";
+                    let dZero = new Date(pDate); dZero.setHours(0,0,0,0);
+                    let sZero = new Date(pStartDate); sZero.setHours(0,0,0,0);
+                    
+                    let overDueDiff = Math.floor((tZero - dZero) / (1000 * 60 * 60 * 24));
+                    let runDiff = Math.floor((tZero - sZero) / (1000 * 60 * 60 * 24));
+
+                    if (isMainFinished) {
+                        statusBadge = `<span style="color:#27ae60; font-weight:bold;">✅ ${p.status}</span>`;
+                    } else if (overDueDiff > 0) {
+                        statusBadge = `<div style="color:#c0392b; font-weight:bold; font-size:13px;">🚨 ล่าช้า ${overDueDiff} วัน</div><div style="font-size:11px; color:#7f8c8d;">(${p.status})</div>`;
+                    } else if (runDiff < 0) {
+                        statusBadge = `<div style="color:#f39c12; font-weight:bold; font-size:12px;">⏳ รอเริ่มงาน</div><div style="font-size:11px; color:#7f8c8d;">(${p.status})</div>`;
+                    } else {
+                        statusBadge = `<div style="color:#2980b9; font-weight:bold; font-size:12px;">▶️ ทำมา ${runDiff} วัน</div><div style="font-size:11px; color:#7f8c8d;">(${p.status})</div>`;
+                    }
+                    
+                    let rowClass = "";
+                    if (prioText.includes('5')) rowClass = "prio-5";
+                    else if (prioText.includes('4')) rowClass = "prio-4";
+                    else if (prioText.includes('3')) rowClass = "prio-3";
+                    else if (prioText.includes('2')) rowClass = "prio-2";
+                    
+                    if (overDueDiff > 0 && !isMainFinished) {
+                        rowClass += " overdue-row";
+                    }
+
+                    // 🚨 เพิ่มปุ่ม "👁️ ดูงานย่อย" ให้คลิกเปิดป๊อปอัปกระบวนการทั้งหมดได้เลย
+                    progressHtml += `<tr class="${rowClass.trim()}">
+                        <td>
+                            <strong>${p.code}</strong><br>
+                            <button class="btn" style="background:#3498db; color:white; font-size:10px; padding:3px 6px; border:none; border-radius:3px; margin-top:5px; cursor:pointer;" onclick="showProjectOverview('${p.code}')">👁️ ดูงานย่อย</button>
+                        </td>
+                        <td style="font-weight:bold; color:#34495e;">${prioText}</td>
+                        <td style="font-size:14px; font-weight:bold; color:#2c3e50;">${p.name}</td>
+                        <td>${ownerName}</td>
+                        <td style="font-size:12px;">${p.startDate}</td>
+                        <td style="font-size:12px; font-weight:bold; color:#e74c3c;">${p.dueDate}</td>
+                        <td>${statusBadge}</td>
+                        <td>${barHtml}</td>
+                    </tr>`;
+                }
+            });
+
+            let updateText = (id, text) => { let el = document.getElementById(id); if(el) el.innerText = text; };
+            updateText('kpiMainActive', modalDataLists.main.active.length); updateText('kpiMainPending', modalDataLists.main.pending.length); updateText('kpiMainOverdue', modalDataLists.main.overdue.length); updateText('kpiMainUnfinished', modalDataLists.main.unfinished.length); updateText('kpiSubActive', modalDataLists.sub.active.length); updateText('kpiSubPending', modalDataLists.sub.pending.length); updateText('kpiSubOverdue', modalDataLists.sub.overdue.length); updateText('kpiSubUnfinished', modalDataLists.sub.unfinished.length); updateText('kpiCreated', modalDataLists.perf.created.length); updateText('kpiCompleted', modalDataLists.perf.completed.length);
+            let pctMain = modalDataLists.main.unfinished.length === 0 ? 0 : Math.round((modalDataLists.main.overdue.length / modalDataLists.main.unfinished.length) * 100); updateText('kpiMainOverduePercent', `(${pctMain}% ของงานที่ยังไม่จบ)`); 
+            let pctSub = modalDataLists.sub.unfinished.length === 0 ? 0 : Math.round((modalDataLists.sub.overdue.length / modalDataLists.sub.unfinished.length) * 100); updateText('kpiSubOverduePercent', `(${pctSub}% ของงานที่ยังไม่จบ)`);
+
+            let ownerHtml = ''; for (let name in ownerStats) { if(ownerStats[name].active > 0 || ownerStats[name].done > 0) { ownerHtml += `<tr><td>${name}</td><td>${ownerStats[name].dept}</td><td class="text-center text-red">${ownerStats[name].active}</td><td class="text-center text-green">${ownerStats[name].done}</td></tr>`; } } 
+            let tableOwner = document.getElementById('tableOwnerStats'); if(tableOwner) tableOwner.innerHTML = ownerHtml || '<tr><td colspan="4" class="text-center">ไม่มีข้อมูล</td></tr>';
+            
+            let subHtml = ''; for (let name in subStats) { if(subStats[name].active > 0 || subStats[name].done > 0) { subHtml += `<tr><td>${name}</td><td>${subStats[name].dept}</td><td class="text-center text-red">${subStats[name].active}</td><td class="text-center text-green">${subStats[name].done}</td></tr>`; } } 
+            let tableSub = document.getElementById('tableSubStats'); if(tableSub) tableSub.innerHTML = subHtml || '<tr><td colspan="4" class="text-center">ไม่มีข้อมูล</td></tr>';
+            
+            let progTable = document.getElementById('tableProjectProgress'); if(progTable) progTable.innerHTML = progressHtml || '<tr><td colspan="8" class="text-center" style="padding:20px; color:#7f8c8d;">ไม่พบข้อมูลโปรเจกต์ที่ตรงกับเงื่อนไขการกรอง</td></tr>';
+        } catch (e) { alert("🚨 ข้อผิดพลาดในระบบกรองข้อมูล: " + e.message); console.error(e); }
+    }
+
+    function renderMyTasks() {
+        try {
+            if(!rawData || rawData.length === 0) return;
+            let userSel = document.getElementById('userSelector'); const targetUser = userSel ? userSel.value.trim() : "";
+            let dispName = document.getElementById('displayUserName'); if(dispName) dispName.innerText = "คุณ" + targetUser;
+            const nowZero = new Date(); nowZero.setHours(0,0,0,0); const exactNow = new Date();
+            let myProjCount = 0; let mySubCount = 0; let myOverdueCount = 0; let myProjHtml = ''; let myTodos = []; let myApprovals = []; let timelineEvents = []; let datesWithTasks = {}; let myAllTasksForPerf = []; window.currentDatesWithTasks = datesWithTasks; modalDataLists.mytasks = { owner: [], assignee: [], my_overdue: [] };
+
+            rawData.forEach(p => {
+                let pDate = parseDate(p.dueDate); let isMainFinished = (String(p.status).includes('เสร็จ') || String(p.status).toLowerCase().includes('done')); let isMainPending = (p.status === 'รอตรวจสอบ' || p.approvalStatus === 'รอตรวจสอบ'); let isMainOverdue = (pDate < exactNow && !isMainFinished && !isMainPending); let ownerName = p.owner ? p.owner.toString().trim() : ""; 
+                
+                if(safeCompare(ownerName, targetUser) && !isMainFinished) {
+                    myProjCount++; modalDataLists.mytasks.owner.push({ code: p.code, name: p.name, meta: `📅 กำหนดส่ง: ${p.dueDate} | 📌 สถานะ: ${p.status}` });
+                    let tSub = (p.subTasks || []).length; let dSub = 0; let pSub = 0; let notStart = 0;
+                    (p.subTasks || []).forEach(s => { if(s.status === 'เสร็จสิ้นและตรวจสอบแล้ว') dSub++; else if(s.status === 'กำลังทำ' || s.status === 'กำลังดำเนินการ') pSub++; else notStart++; });
+                    let percent = tSub === 0 ? 0 : Math.round((dSub / tSub) * 100);
+                    
+                    myProjHtml += `
+                    <div class="my-proj-card">
+                        <div style="display:flex; justify-content:space-between;"><strong style="color:#2980b9;">[${p.code}]</strong><span style="font-size:12px; color:#e74c3c; font-weight:bold;">${isMainOverdue ? '⚠️ เลยกำหนด' : '📅 ' + p.dueDate}</span></div>
+                        <div style="font-weight:bold; margin:5px 0;">${p.name}</div>
+                        <div class="progress-container" style="border:1px solid #bdc3c7; border-radius:4px; overflow:hidden; background:#ecf0f1;"><div class="progress-fill ${percent===100?'done':''}" style="width:${percent}%; height:8px;"></div></div>
+                        <div class="stat-bar" style="margin-top:6px;"><div class="stat-item">ย่อย: ${tSub}</div><div class="stat-item">ไม่เริ่ม: ${notStart}</div><div class="stat-item prog">กำลังทำ: ${pSub}</div><div class="stat-item done">เสร็จ: ${dSub}</div></div>
+                        <div style="margin-top:10px; text-align:right; border-top:1px dashed #bdc3c7; padding-top:8px;"><button class="btn" style="background:#e74c3c; color:white; padding:6px 12px; font-size:12px; border:none; border-radius:4px; cursor:pointer; margin-right:5px;" onclick="deleteProject('${p.code}')">🗑️ ลบโปรเจกต์</button><button class="btn" style="background:#f39c12; color:white; padding:6px 12px; font-size:12px; border:none; border-radius:4px; cursor:pointer;" onclick="openManageProjectModal('${p.code}')">⚙️ แก้ไขโปรเจกต์</button></div>
+                    </div>`;
+                }
+
+                (p.subTasks || []).forEach(sub => {
+                    let assigneesList = (sub.assignee || "").split(',').map(s=>s.trim().toLowerCase());
+                    let isMyTask = assigneesList.includes(targetUser.toLowerCase());
+                    let isMyApproval = safeCompare(sub.subApprover, targetUser);
+
+                    if(isMyTask && sub.status !== 'Cancel') {
+                        let subDate = parseDate(sub.dueDate); let isSubFinished = (sub.status === 'เสร็จสิ้นและตรวจสอบแล้ว'); let isSubPending = (sub.status === 'เสร็จสิ้น (รอตรวจ)'); let isSubOverdue = (subDate < exactNow && !isSubFinished && !isSubPending);
+                        myAllTasksForPerf.push({ projCode: p.code, subName: sub.subName, dueDateStr: sub.dueDate, dateObj: subDate, status: sub.status, isOverdue: isSubOverdue });
+                        
+                        if(!isSubFinished) {
+                            mySubCount++; modalDataLists.mytasks.assignee.push({ code: sub.subCode, name: sub.subName, meta: `📅 กำหนดส่ง: ${sub.dueDate} | 📌 สถานะ: ${sub.status}` });
+                            if(isSubOverdue) { myOverdueCount++; modalDataLists.mytasks.my_overdue.push({ code: sub.subCode, name: sub.subName, meta: `🚨 ล่าช้า! (กำหนดส่ง: ${sub.dueDate})` }); }
+                            myTodos.push({ projName: p.name, projCode: p.code, subId: sub.subId, subCode: sub.subCode, subName: sub.subName, dueDate: sub.dueDate, dateObj: subDate, status: sub.status, isOverdue: isSubOverdue, resultLink: sub.resultLink, remark: sub.remark, assigneeStr: sub.assignee, approverStr: sub.subApprover, desc: sub.description, startDate: sub.startDate });
+                            let diffTime = Math.ceil((subDate - nowZero) / (1000 * 60 * 60 * 24));
+                            if(diffTime >= -30 && diffTime <= 30) { 
+                                timelineEvents.push({ title: sub.subName, dateStr: sub.dueDate, dateObj: subDate, isOverdue: isSubOverdue, projCode: p.code, desc: sub.description || "", subId: sub.subId, subCode: sub.subCode, status: sub.status, resultLink: sub.resultLink, remark: sub.remark, assigneeStr: sub.assignee, approverStr: sub.subApprover, startDate: sub.startDate });
+                                let dKey = subDate.getDate() + "/" + subDate.getMonth() + "/" + subDate.getFullYear();
+                                if(!datesWithTasks[dKey]) datesWithTasks[dKey] = { hasTask: true, overdue: false, tasks: [] };
+                                if(isSubOverdue) datesWithTasks[dKey].overdue = true; datesWithTasks[dKey].tasks.push({ projCode: p.code, subName: sub.subName, status: sub.status, isOverdue: isSubOverdue, desc: sub.description });
+                            }
+                        }
+                    }
+
+                    if(isMyApproval && sub.status === 'เสร็จสิ้น (รอตรวจ)') {
+                        myApprovals.push({ projName: p.name, projCode: p.code, subId: sub.subId, subCode: sub.subCode, subName: sub.subName, dueDate: sub.dueDate, status: sub.status, resultLink: sub.resultLink, remark: sub.remark, assigneeStr: sub.assignee, approverStr: sub.subApprover, desc: sub.description, startDate: sub.startDate });
+                    }
+                });
+            });
+
+            let firstDayOfWeek = exactNow.getDate() - exactNow.getDay() + (exactNow.getDay() === 0 ? -6 : 1); let weekDays = []; 
+            for(let i = 0; i < 7; i++) { let d = new Date(exactNow.getFullYear(), exactNow.getMonth(), firstDayOfWeek + i); d.setHours(0,0,0,0); weekDays.push(d); }
+            const dayNamesTH = ["อา.", "จ.", "อ.", "พ.", "พฤ.", "ศ.", "ส."]; let perfHtml = ''; window.weeklyPerfTasks = {}; let sumTotal = 0, sumDone = 0, sumPending = 0, sumOverdue = 0;
+
+            weekDays.forEach(day => {
+                let dateKey = day.getFullYear() + '-' + day.getMonth() + '-' + day.getDate();
+                window.weeklyPerfTasks[dateKey + '_total'] = []; window.weeklyPerfTasks[dateKey + '_done'] = []; window.weeklyPerfTasks[dateKey + '_pending'] = []; window.weeklyPerfTasks[dateKey + '_overdue'] = [];
+                
+                myAllTasksForPerf.forEach(t => {
+                    let tD = new Date(t.dateObj); tD.setHours(0,0,0,0);
+                    if(tD.getTime() === day.getTime()) {
+                        window.weeklyPerfTasks[dateKey + '_total'].push(t); let st = t.status || ""; let isDone = st.includes('เสร็จ'); let isPendingStatus = st.includes('ยังไม่ได้ทำ') || st.includes('กำลัง') || st.includes('แก้') || st.includes('ปฏิเสธ') || st.includes('ปฎิเสธ');
+                        if(isDone) { window.weeklyPerfTasks[dateKey + '_done'].push(t); } else if(t.isOverdue) { window.weeklyPerfTasks[dateKey + '_overdue'].push(t); } else if(isPendingStatus) { window.weeklyPerfTasks[dateKey + '_pending'].push(t); }
+                    }
+                });
+                
+                let total = window.weeklyPerfTasks[dateKey + '_total'].length; let done = window.weeklyPerfTasks[dateKey + '_done'].length; let pending = window.weeklyPerfTasks[dateKey + '_pending'].length; let overdue = window.weeklyPerfTasks[dateKey + '_overdue'].length;
+                sumTotal += total; sumDone += done; sumPending += pending; sumOverdue += overdue;
+                
+                let percent = total === 0 ? 0 : Math.round((done / total) * 100); 
+                let progColor = '#bdc3c7'; if (total > 0) { progColor = percent >= 80 ? '#27ae60' : (percent >= 50 ? '#f39c12' : '#e74c3c'); }
+                
+                let isToday = (day.getTime() === nowZero.getTime()); let rowClass = isToday ? 'class="today-row"' : ''; let dayStr = `${dayNamesTH[day.getDay()]} ${day.getDate()}/${day.getMonth()+1}`; if(isToday) dayStr += " (วันนี้)"; let dayStrSafe = dayStr.replace(/'/g, "\\'"); 
+                
+                perfHtml += `
+                <tr ${rowClass}>
+                    <td><strong>${dayStr}</strong></td>
+                    <td><span class="badge bg-blue ${total > 0 ? 'clickable' : ''}" ${total > 0 ? `onclick="openWeeklyModal('${dateKey}', 'total', '${dayStrSafe}')"` : ''}>${total}</span></td>
+                    <td><span class="badge bg-green ${done > 0 ? 'clickable' : ''}" ${done > 0 ? `onclick="openWeeklyModal('${dateKey}', 'done', '${dayStrSafe}')"` : ''}>${done}</span></td>
+                    <td><span class="badge bg-gray ${pending > 0 ? 'clickable' : ''}" ${pending > 0 ? `onclick="openWeeklyModal('${dateKey}', 'pending', '${dayStrSafe}')"` : ''}>${pending}</span></td>
+                    <td><span class="badge ${overdue > 0 ? 'bg-red clickable' : 'bg-gray'}" style="${overdue === 0 ? 'background:transparent; color:#bdc3c7;' : ''}" ${overdue > 0 ? `onclick="openWeeklyModal('${dateKey}', 'overdue', '${dayStrSafe}')"` : ''}>${overdue}</span></td>
+                    <td><div style="display:flex; align-items:center; gap:10px; justify-content:center;"><div class="progress-container" style="width:100px; height:8px; background:#ecf0f1; border:1px solid #7f8c8d; border-radius:4px; overflow:hidden;"><div class="progress-fill" style="width:${percent}%; background:${progColor}; height:100%;"></div></div><span style="font-size:12px; font-weight:bold; color:${progColor}; width:30px; text-align:right;">${percent}%</span></div></td>
+                </tr>`;
+            });
+
+            let sumPercent = sumTotal === 0 ? 0 : Math.round((sumDone / sumTotal) * 100); 
+            let sumProgColor = '#bdc3c7'; if (sumTotal > 0) { sumProgColor = sumPercent >= 80 ? '#27ae60' : (sumPercent >= 50 ? '#f39c12' : '#e74c3c'); }
+            
+            perfHtml += `
+            <tr style="background-color: #f4f6f7; border-top: 2px solid #bdc3c7;">
+                <td style="text-align: right; font-weight: bold; color: #2c3e50;">รวมทั้งสัปดาห์:</td>
+                <td><span class="badge bg-blue" style="font-size:13px;">${sumTotal}</span></td>
+                <td><span class="badge bg-green" style="font-size:13px;">${sumDone}</span></td>
+                <td><span class="badge bg-gray" style="font-size:13px;">${sumPending}</span></td>
+                <td><span class="badge ${sumOverdue > 0 ? 'bg-red' : 'bg-gray'}" style="font-size:13px; ${sumOverdue === 0 ? 'background:transparent; color:#bdc3c7;' : ''}">${sumOverdue}</span></td>
+                <td><div style="display:flex; align-items:center; gap:10px; justify-content:center;"><div class="progress-container" style="width:100px; height:8px; background:#ecf0f1; border:1px solid #7f8c8d; border-radius:4px; overflow:hidden;"><div class="progress-fill" style="width:${sumPercent}%; background:${sumProgColor}; height:100%;"></div></div><span style="font-size:13px; font-weight:bold; color:${sumProgColor}; width:30px; text-align:right;">${sumPercent}%</span></div></td>
+            </tr>`;
+            let wTable = document.getElementById('weeklyPerfTable'); if(wTable) wTable.innerHTML = perfHtml;
+
+            let elProjCount = document.getElementById('myProjCount'); if(elProjCount) elProjCount.innerText = myProjCount; 
+            let elSubCount = document.getElementById('mySubCount'); if(elSubCount) elSubCount.innerText = mySubCount; 
+            let elOverdueCount = document.getElementById('myOverdueCount'); if(elOverdueCount) elOverdueCount.innerText = myOverdueCount;
+            let elApprCount = document.getElementById('myApprCount'); if(elApprCount) elApprCount.innerText = myApprovals.length;
+
+            let elProjList = document.getElementById('myProjectsList'); if(elProjList) elProjList.innerHTML = myProjHtml || '<p style="color:#7f8c8d; text-align:center;">ไม่มีโปรเจกต์ที่คุมอยู่ 🎉</p>';
+
+            myTodos.sort((a, b) => { if(a.dateObj.getTime() !== b.dateObj.getTime()) return a.dateObj - b.dateObj; return a.projCode.localeCompare(b.projCode); }); 
+            let todoHtml = '';
+            myTodos.forEach(t => { 
+                let safeName = escapeInlineStr(t.subName); let safeLink = escapeInlineStr(t.resultLink); let safeRemark = escapeInlineStr(t.remark); let st = t.status || '-'; let safeAssignee = escapeInlineStr(t.assigneeStr); let safeApprover = escapeInlineStr(t.approverStr); let safeDesc = escapeInlineStr(t.desc);
+                // 🚨 อัปเดตการแสดงผล เริ่มงาน (To-Do)
+                todoHtml += `
+                <div class="todo-item ${t.isOverdue ? 'overdue' : ''}">
+                    <div class="todo-proj-name">[${t.projCode}] ${t.projName}</div><div class="todo-task-name">${t.subName}</div>
+                    <div class="todo-meta" style="flex-direction: column; align-items: flex-start; gap: 4px;">
+                        <span>📌 สถานะ: ${st}</span>
+                        <span style="color:#7f8c8d; font-size: 11px;">🚀 เริ่มงาน: ${t.startDate || 'ไม่ได้ระบุ'}</span>
+                        <span style="${t.isOverdue ? 'color:#c0392b; font-weight:bold;' : ''}">📅 กำหนดส่ง: ${t.dueDate}</span>
+                    </div>
+                    <div style="margin-top: 10px; border-top: 1px dashed #e1e8ed; padding-top: 8px; display: grid; grid-template-columns: repeat(3, 1fr); gap: 5px;">
+                        <button class="btn-view-detail" style="background:#7f8c8d;" onclick="showProjectOverview('${t.projCode}')">👁️ ภาพรวม</button>
+                        <button class="btn-view-detail" style="background:#95a5a6;" onclick="showTaskDetail('${t.projCode}', '${safeName}', '${t.dueDate}', '${safeDesc}', '${t.subId}', '${t.subCode}', '${st}', '${safeLink}', '${safeRemark}', '${safeAssignee}', '${safeApprover}')">🔍 งานย่อย</button>
+                        <button class="btn-view-detail" style="background:#3498db;" onclick="openEditModal('${t.subId}', '${t.subCode}', '${safeName}', '${st}', '${safeLink}', '${safeRemark}', '${safeAssignee}', '${safeApprover}')">✏️ อัปเดต</button>
+                    </div>
+                </div>`; 
+            });
+            let elTodosList = document.getElementById('myTodosList'); if(elTodosList) elTodosList.innerHTML = todoHtml || '<p style="color:#7f8c8d; text-align:center;">ไม่มีงานย่อยค้าง 🎉</p>';
+
+            let apprHtml = '';
+            myApprovals.forEach(t => {
+                let safeName = escapeInlineStr(t.subName); let safeLink = escapeInlineStr(t.resultLink); let safeRemark = escapeInlineStr(t.remark); let st = t.status || '-'; let safeAssignee = escapeInlineStr(t.assigneeStr); let safeApprover = escapeInlineStr(t.approverStr); let safeDesc = escapeInlineStr(t.desc);
+                apprHtml += `
+                <div class="todo-item" style="border-left-color: #f39c12;">
+                    <div class="todo-proj-name">[${t.projCode}] ${t.projName}</div><div class="todo-task-name">${t.subName}</div>
+                    <div class="todo-meta"><span>👤 คนทำ: ${t.assigneeStr}</span></div>
+                    <div style="margin-top: 10px; border-top: 1px dashed #e1e8ed; padding-top: 8px; display: grid; grid-template-columns: repeat(3, 1fr); gap: 5px;">
+                        <button class="btn-view-detail" style="background:#7f8c8d;" onclick="showProjectOverview('${t.projCode}')">👁️ ภาพรวม</button>
+                        <button class="btn-view-detail" style="background:#95a5a6;" onclick="showTaskDetail('${t.projCode}', '${safeName}', '${t.dueDate}', '${safeDesc}', '${t.subId}', '${t.subCode}', '${st}', '${safeLink}', '${safeRemark}', '${safeAssignee}', '${safeApprover}')">🔍 งานย่อย</button>
+                        <button class="btn-view-detail" style="background:#27ae60;" onclick="openEditModal('${t.subId}', '${t.subCode}', '${safeName}', '${st}', '${safeLink}', '${safeRemark}', '${safeAssignee}', '${safeApprover}')">✅ ตรวจงาน</button>
+                    </div>
+                </div>`;
+            });
+            let elApprList = document.getElementById('myApprovalsList'); if(elApprList) elApprList.innerHTML = apprHtml || '<p style="color:#7f8c8d; text-align:center;">เกลี้ยง! ไม่มีงานค้างตรวจ 🎉</p>';
+
+            timelineEvents.sort((a, b) => a.dateObj - b.dateObj); let timeHtml = '';
+            timelineEvents.slice(0, 10).forEach(e => {
+                let safeDesc = escapeInlineStr(e.desc); let safeTitle = escapeInlineStr(e.title); let safeLink = escapeInlineStr(e.resultLink); let safeRemark = escapeInlineStr(e.remark); let st = e.status || ''; let safeAssignee = escapeInlineStr(e.assigneeStr); let safeApprover = escapeInlineStr(e.approverStr);
+                // 🚨 อัปเดตการแสดงผล เริ่มงาน (Timeline)
+                timeHtml += `
+                <div class="timeline-item ${e.isOverdue ? 'overdue' : ''}">
+                    <div class="timeline-date ${e.isOverdue ? 'text-red' : ''}">
+                        <span style="color:#7f8c8d; font-weight:normal; margin-right:5px;">(เริ่ม: ${e.startDate || '-'})</span> 
+                        🕒 ${e.dateStr} ${getCountdownText(e.dateObj)}
+                    </div>
+                    <div class="timeline-title"><strong>[${e.projCode}]</strong> - ${e.title}</div>
+                    <button class="btn-view-detail" style="margin-top: 8px;" onclick="showTaskDetail('${e.projCode}', '${safeTitle}', '${e.dateStr}', '${safeDesc}', '${e.subId}', '${e.subCode}', '${st}', '${safeLink}', '${safeRemark}', '${safeAssignee}', '${safeApprover}')">🔍 ดูรายละเอียด</button>
+                </div>`;
+            });
+            let elUpcTimeline = document.getElementById('upcomingTimeline'); if(elUpcTimeline) elUpcTimeline.innerHTML = timeHtml || '<div class="loading">ไม่มีงานใกล้ถึงกำหนด</div>';
+            
+            renderMiniCalendar(nowZero.getFullYear(), nowZero.getMonth(), datesWithTasks);
+
+        } catch(e) { alert("🚨 ข้อผิดพลาดในการเรนเดอร์งานของฉัน: " + e.message); console.error(e); }
+    }
+    
+    function renderArchive() {
+        if(!rawData || rawData.length === 0) return;
+        let userSel = document.getElementById('userSelector'); const targetUser = userSel ? userSel.value.trim() : "";
+        let htmlOwner = "", htmlAll = ""; let groupedSub = {}; let groupedAppr = {}; 
+        
+        rawData.forEach(p => {
+            let isMainFinished = (String(p.status).includes('เสร็จ') || String(p.status).toLowerCase().includes('done')); 
+            if(isMainFinished) {
+                // 🚨 อัปเดต HTML: เพิ่มปุ่ม "แก้ไข/ดึงงานกลับ" เข้าไปในการ์ดของแฟ้มเก็บงาน
+                let projCardHtml = `
+                <div style="background:#fff; border:1px solid #bdc3c7; border-left:4px solid #34495e; border-radius:4px; padding:12px; margin-bottom:10px;">
+                    <div style="display:flex; justify-content:space-between; align-items:flex-start;">
+                        <div>
+                            <strong style="color:#2980b9;">[${p.code}]</strong> <span style="font-weight:bold;">${p.name}</span>
+                            <div style="font-size:12px; color:#7f8c8d; margin-top:5px;">👤 เจ้าของ: ${p.owner} | 📅 จบเมื่อ: ${p.dueDate}</div>
+                        </div>
+                        <div style="display:flex; flex-direction:column; gap:5px; min-width:120px;">
+                            <button class="btn-view-detail" style="background:#7f8c8d;" onclick="showProjectOverview('${p.code}')">👁️ ดูภาพรวมเต็มๆ</button>
+                            ${safeCompare(p.owner, targetUser) || userAuth.overview === "YES" ? `<button class="btn-view-detail" style="background:#f39c12;" onclick="openManageProjectModal('${p.code}')">⚙️ ดึงงานกลับ</button>` : ''}
+                        </div>
+                    </div>
+                </div>`;
+                if(safeCompare(p.owner, targetUser)) { htmlOwner += projCardHtml; }
+                htmlAll += projCardHtml;
+            }
+
+            (p.subTasks || []).forEach(sub => {
+                let assigneesList = (sub.assignee || "").split(',').map(s=>s.trim().toLowerCase());
+                let isMyTask = assigneesList.includes(targetUser.toLowerCase());
+                let isMyApproval = safeCompare(sub.subApprover, targetUser);
+                let isSubFinished = (sub.status === 'เสร็จสิ้นและตรวจสอบแล้ว');
+                
+                if(!isSubFinished) return;
+
+                let safeName = escapeInlineStr(sub.subName); let safeLink = escapeInlineStr(sub.resultLink); let safeRemark = escapeInlineStr(sub.remark); let safeAssignee = escapeInlineStr(sub.assignee); let safeApprover = escapeInlineStr(sub.subApprover); let safeDesc = escapeInlineStr(sub.description);
+                let st = sub.status || '-';
+                
+                let linkBtnHtml = (sub.resultLink && sub.resultLink.trim() !== "") 
+                    ? `<div style="margin-top:8px;"><a href="${sub.resultLink}" target="_blank" class="sub-link-btn">🔗 ดูลิงก์ผลงานแนบ</a></div>` 
+                    : `<div style="margin-top:8px; font-size:11px; color:#bdc3c7; font-style:italic;">(ไม่มีลิงก์ผลงาน)</div>`;
+                
+                let badgeMainStatus = isMainFinished ? `<span style="background:#27ae60; color:white; padding:2px 5px; border-radius:3px; font-size:10px;">โปรเจกต์ปิดแล้ว</span>` : `<span style="background:#f39c12; color:white; padding:2px 5px; border-radius:3px; font-size:10px;">โปรเจกต์กำลังทำ</span>`;
+
+                let subCardHtml = `
+                <div style="background:#fff; border:1px solid #bdc3c7; border-radius:4px; padding:10px; display:flex; justify-content:space-between; align-items:center; margin-bottom:8px;">
+                    <div style="flex:1;">
+                        <div style="font-weight:bold; color:#2c3e50; font-size:13px;">${sub.subName}</div>
+                        <div style="font-size:11px; margin-top:3px; color:#27ae60;">📌 สถานะ: ${st}</div>
+                        ${linkBtnHtml} 
+                    </div>
+                    <button class="btn-view-detail" style="background:#95a5a6; margin-left:10px;" onclick="showTaskDetail('${p.code}', '${safeName}', '${sub.dueDate}', '${safeDesc}', 'undefined', '${sub.subCode}', '${st}', '${safeLink}', '${safeRemark}', '${safeAssignee}', '${safeApprover}')">🔍 ดูข้อมูลเต็ม</button>
+                </div>`;
+
+                let projectHeaderKey = `[${p.code}] ${p.name} ${badgeMainStatus}`;
+
+                if(isMyTask) { if(!groupedSub[projectHeaderKey]) groupedSub[projectHeaderKey] = []; groupedSub[projectHeaderKey].push(subCardHtml); }
+                if(isMyApproval) { if(!groupedAppr[projectHeaderKey]) groupedAppr[projectHeaderKey] = []; groupedAppr[projectHeaderKey].push(subCardHtml); }
+            });
+        });
+
+        function buildGroupedHtml(groupedData) {
+            let html = "";
+            for (let [projName, tasksHtmlArr] of Object.entries(groupedData)) { html += `<div class="archive-group"><div class="archive-group-header">📦 ${projName}</div>${tasksHtmlArr.join('')}</div>`; }
+            return html;
+        }
+
+        document.getElementById('archOwnerList').innerHTML = htmlOwner || '<div style="color:#bdc3c7; padding:20px; text-align:center; grid-column: 1 / -1;">ไม่มีประวัติโปรเจกต์ที่ปิดจ็อบ 🎉</div>';
+        document.getElementById('archSubList').innerHTML = buildGroupedHtml(groupedSub) || '<div style="color:#bdc3c7; padding:20px; text-align:center;">ไม่มีประวัติงานย่อยที่คุณทำสำเร็จ 🎉</div>';
+        document.getElementById('archApprList').innerHTML = buildGroupedHtml(groupedAppr) || '<div style="color:#bdc3c7; padding:20px; text-align:center;">ไม่มีประวัติการตรวจงานที่เสร็จสิ้น 🎉</div>';
+        document.getElementById('archAllList').innerHTML = htmlAll || '<div style="color:#bdc3c7; padding:20px; text-align:center; grid-column: 1 / -1;">ยังไม่มีโปรเจกต์ใดถูกปิดจ็อบ 🎉</div>';
+    }
+
+    function switchArchiveTab(tabName) {
+        document.querySelectorAll('.archive-tab').forEach(t => t.classList.remove('active'));
+        document.querySelectorAll('.archive-content').forEach(c => c.style.display = 'none');
+        let capName = tabName.charAt(0).toUpperCase() + tabName.slice(1);
+        let tabEl = document.getElementById('tabArch' + capName); let contEl = document.getElementById('arch' + capName + 'Content');
+        if(tabEl) tabEl.classList.add('active'); if(contEl) contEl.style.display = 'block';
+    }
+
+    function openCalendarModal(dKey) {
+        let dayData = window.currentDatesWithTasks[dKey]; if(!dayData || !dayData.tasks || dayData.tasks.length === 0) return;
+        let parts = dKey.split('/'); let dateStr = `${parts[0]}/${parseInt(parts[1])+1}/${parts[2]}`; 
+        document.getElementById('listModalTitleMyTasks').innerText = `📅 งานประจำวันที่ ${dateStr}`; 
+        let html = "";
+        dayData.tasks.forEach(t => { 
+            let borderCol = t.isOverdue ? '#e74c3c' : '#3498db'; let bgCol = t.isOverdue ? '#fff5f5' : '#ffffff'; let taskDesc = t.desc && t.desc.trim() !== "" ? t.desc : "<i>(ไม่มีรายละเอียด)</i>";
+            html += `
+            <div class="list-item" style="background:${bgCol}; border-left: 4px solid ${borderCol}; margin-bottom: 8px; border-radius: 4px; display:block;">
+                <div class="list-title" style="margin-bottom:6px;">[${t.projCode}] ${t.subName}</div>
+                <div style="font-size:13px; color:#34495e; background:#ecf0f1; padding:8px; border-radius:4px; margin-bottom:6px;"><strong>📝 รายละเอียด:</strong><br> ${taskDesc}</div>
+                <div class="list-meta" style="font-size:12px;">📌 สถานะ: <span style="font-weight:bold; color:${borderCol};">${t.status}</span> ${t.isOverdue ? '<span style="color:#c0392b; font-weight:bold; margin-left:10px;">🚨 ล่าช้าแล้ว</span>' : ''}</div>
+            </div>`; 
+        });
+        document.getElementById('listModalBodyMyTasks').innerHTML = html; document.getElementById('listModalMyTasks').style.display = 'flex';
+    }
+
+    function openWeeklyModal(dateKey, category, dayStr) {
+        let taskList = window.weeklyPerfTasks[dateKey + '_' + category]; if (!taskList || taskList.length === 0) return;
+        let catTitle = ""; if (category === 'total') catTitle = "🎯 เป้าหมายงานทั้งหมด"; if (category === 'done') catTitle = "✅ งานที่เสร็จแล้ว"; if (category === 'pending') catTitle = "⏳ งานที่กำลังทำ"; if (category === 'overdue') catTitle = "🚨 งานที่เลยกำหนด";
+        document.getElementById('listModalTitleMyTasks').innerText = `${catTitle} (${dayStr})`; let html = "";
+        taskList.forEach(t => {
+            let isDone = (t.status || "").includes('เสร็จ'); let borderCol = t.isOverdue ? '#e74c3c' : (isDone ? '#27ae60' : '#3498db'); let bgCol = t.isOverdue ? '#fff5f5' : '#ffffff';
+            html += `<div class="list-item" style="background:${bgCol}; border-left: 4px solid ${borderCol}; margin-bottom: 5px; border-radius: 4px;"><div><div class="list-title">[${t.projCode}] ${t.subName}</div><div class="list-meta">📌 สถานะ: ${t.status} | 📅 กำหนด: ${t.dueDateStr} ${t.isOverdue ? '<span style="color:#c0392b; font-weight:bold; margin-left:10px;">(ล่าช้า)</span>' : ''}</div></div></div>`;
+        });
+        document.getElementById('listModalBodyMyTasks').innerHTML = html; document.getElementById('listModalMyTasks').style.display = 'flex';
+    }
+
+    function renderMiniCalendar(year, month, datesMap) {
+        let calHtml = ''; let firstDay = new Date(year, month, 1).getDay(); let daysInMonth = new Date(year, month + 1, 0).getDate(); let today = new Date();
+        for(let i = 0; i < firstDay; i++) { calHtml += `<div></div>`; }
+        for(let d = 1; d <= daysInMonth; d++) {
+            let dKey = d + "/" + month + "/" + year; let cssClass = 'cal-date'; let inlineStyle = ''; let onClickEvent = '';
+            if(datesMap[dKey]) { cssClass += datesMap[dKey].overdue ? ' overdue' : ' has-task'; onClickEvent = `onclick="openCalendarModal('${dKey}')"`; }
+            if(d === today.getDate() && month === today.getMonth() && year === today.getFullYear()) { inlineStyle = 'border: 2px solid #34495e; font-weight:bold;'; }
+            calHtml += `<div class="${cssClass}" style="${inlineStyle}" ${onClickEvent}>${d}</div>`;
+        }
+        let miniCalEl = document.getElementById('miniCalendarDates'); if(miniCalEl) miniCalEl.innerHTML = calHtml;
+    }
+
+    function showTaskDetail(projCode, taskName, dateStr, desc, subId, subCode, status, link, remark, assigneesStr, approverStr) {
+        document.getElementById('modalTitle').innerText = `[${projCode}] ${taskName}`; document.getElementById('modalDate').innerText = `📅 กำหนดส่ง: ${dateStr}`; 
+        let descHtml = desc && desc !== 'undefined' && desc !== '' ? desc : "<i>(ไม่ได้ระบุรายละเอียดงานไว้)</i>";
+        if (link && link !== 'undefined' && link.trim() !== '') {
+            descHtml += `<div style="margin-top:15px; border-top:1px dashed #bdc3c7; padding-top:10px;"><span style="font-weight:bold; color:#8e44ad;">🔗 ลิงก์ผลงานที่แนบไว้:</span><br><a href="${link}" target="_blank" class="link-btn">👉 คลิกเพื่อเปิดดูผลงาน</a></div>`;
+        }
+        document.getElementById('modalDesc').innerHTML = descHtml;
+
+        let updateBtn = document.getElementById('btnModalUpdateTask');
+        if (updateBtn) { if (subId && subId !== 'undefined') { updateBtn.style.display = 'inline-block'; updateBtn.onclick = function() { closeModal(); openEditModal(subId, subCode, taskName, status, link, remark, assigneesStr, approverStr); }; } else { updateBtn.style.display = 'none'; } }
+        let proj = rawData.find(p => p.code === projCode); let isAuthorized = false;
+        if(proj && (userAuth.overview === "YES" || safeCompare(proj.owner, userAuth.name))) { isAuthorized = true; }
+        
+        let manageBtn = document.getElementById('btnModalManageProject');
+        if(!manageBtn) { manageBtn = document.createElement('button'); manageBtn.id = 'btnModalManageProject'; manageBtn.className = 'btn'; manageBtn.style = 'background: #f39c12; color: white; padding: 10px 15px; margin-right: 10px;'; manageBtn.innerText = '⚙ แก้ไขโปรเจกต์'; let closeBtn = document.querySelector('.btn-close-modal'); if(closeBtn && closeBtn.parentNode) { closeBtn.parentNode.insertBefore(manageBtn, closeBtn); } }
+        if(isAuthorized) { manageBtn.style.display = 'inline-block'; manageBtn.onclick = function() { closeModal(); openManageProjectModal(projCode); }; } else { manageBtn.style.display = 'none'; }
+        
+        document.getElementById('taskModal').style.display = 'flex';
+    }
+
+    function openManageProjectModal(projCode) {
+        let proj = rawData.find(p => p.code === projCode); if(!proj) return;
+        if (userAuth.overview !== "YES" && !safeCompare(proj.owner, userAuth.name)) { alert("🚨 คุณไม่มีสิทธิ์แก้ไขโปรเจกต์นี้!"); return; }
+
+        document.getElementById('manageProjCode').innerText = projCode; document.getElementById('manageProjCodeInput').value = projCode;
+        let empOptions = '<option value="">-- เลือกพนักงาน --</option>';
+        for (let dept in globalDropdowns.employees) { empOptions += `<optgroup label="📂 ${dept}">`; globalDropdowns.employees[dept].forEach(name => { empOptions += `<option value="${name}" ${safeCompare(name, proj.owner) ? "selected" : ""}>${name}</option>`; }); empOptions += `</optgroup>`; }
+        document.getElementById('editMainAssignee').innerHTML = empOptions; document.getElementById('editMainBrand').innerHTML = globalDropdowns.brand.map(opt => `<option value="${opt}" ${opt===proj.brand?"selected":""}>${opt}</option>`).join(''); document.getElementById('editMainCategory').innerHTML = globalDropdowns.category.map(opt => `<option value="${opt}" ${opt===proj.category?"selected":""}>${opt}</option>`).join(''); document.getElementById('editMainPriority').innerHTML = globalDropdowns.priority.map(opt => `<option value="${opt}" ${opt===proj.priority?"selected":""}>${opt}</option>`).join(''); document.getElementById('editMainStatus').innerHTML = globalDropdowns.taskStatus.map(opt => `<option value="${opt}" ${opt===proj.status?"selected":""}>${opt}</option>`).join('');
+        document.getElementById('editMainName').value = proj.name; document.getElementById('editMainRemark').value = proj.remark || "";
+        let rmLink = document.getElementById('editMainResultLink'); if(rmLink) rmLink.value = proj.resultLink || "";
+
+        let startEl = document.getElementById('editMainStart'); if(startEl._flatpickr) startEl._flatpickr.setDate(proj.startDate, true, "d/m/Y H:i"); let dueEl = document.getElementById('editMainDue'); if(dueEl._flatpickr) dueEl._flatpickr.setDate(proj.dueDate, true, "d/m/Y H:i");
+
+        let subHtml = "";
+        proj.subTasks.forEach(sub => {
+            let sCatHtml = globalDropdowns.subCategory.map(opt => `<option value="${opt}" ${opt===sub.subCategory?"selected":""}>${opt}</option>`).join(''); 
+            let sStatusHtml = globalDropdowns.subTaskStatus.map(opt => `<option value="${opt}" ${opt===sub.status?"selected":""}>${opt}</option>`).join(''); 
+            
+            let subAssList = (sub.assignee || "").split(',').map(s=>s.trim().toLowerCase());
+            let assignCheckboxes = '';
+            for (let dept in globalDropdowns.employees) { 
+                assignCheckboxes += `<div class="multi-select-optgroup">📂 ${dept}</div>`; 
+                globalDropdowns.employees[dept].forEach(name => { 
+                    let isChecked = subAssList.includes(name.toLowerCase()) ? "checked" : ""; 
+                    assignCheckboxes += `<label class="multi-select-option" onclick="event.stopPropagation()"><input type="checkbox" value="${name}" class="sub-assign-cb" onchange="updateMultiSelectText(this)" ${isChecked}> ${name}</label>`; 
+                }); 
+            }
+            
+            let displayTexts = (sub.assignee || "").split(',').filter(x => x.trim() !== "");
+            let btnText = "-- เลือกผู้รับผิดชอบ --";
+            if (displayTexts.length > 0 && displayTexts.length <= 2) btnText = displayTexts.join(', ');
+            else if (displayTexts.length > 2) btnText = `เลือกแล้ว ${displayTexts.length} คน`;
+
+            let sApprHtml = '<option value="">-- ไม่ต้องอนุมัติ --</option>';
+            for (let dept in globalDropdowns.employees) { sApprHtml += `<optgroup label="📂 ${dept}">`; globalDropdowns.employees[dept].forEach(name => { sApprHtml += `<option value="${name}" ${safeCompare(name, sub.subApprover) ? "selected" : ""}>${name}</option>`; }); sApprHtml += `</optgroup>`; }
+            
+            // 🚨 แปลง <br> กลับเป็น \n ตอนดึงมาแก้
+            let safeRemarkText = (sub.remark || "").replace(/<br>/g, '\n').replace(/&quot;/g, '"');
+
+            subHtml += `<div class="sub-task-box edit-sub-box" style="background:#f9fbfc; border:1px solid #bdc3c7; position:relative;"><button class="btn btn-remove" style="position:absolute; top:10px; right:10px; background:#e74c3c; color:white; border:none; padding:5px 10px; border-radius:4px; cursor:pointer;" onclick="if(confirm('ต้องการลบงานย่อยนี้ใช่หรือไม่? (งานจะถูกลบออกจากระบบเมื่อกดปุ่มบันทึกด้านล่าง)')) this.closest('.edit-sub-box').remove()">✖ ลบงานย่อย</button><input type="hidden" class="sub-id" value="${sub.subId}"><div style="font-weight:bold; color:#7f8c8d; border-bottom:1px solid #ecf0f1; margin-bottom:10px; padding-bottom:5px; width:calc(100% - 100px);">รหัสย่อย: ${sub.subCode}</div><div class="grid-3"><div class="form-group"><label>ชื่องานย่อย</label><input type="text" class="sub-name" value="${sub.subName}"></div><div class="form-group"><label>ผู้รับผิดชอบ <i>(หลายคน)</i></label><div class="multi-select-container" onclick="toggleMultiSelect(this, event)"><div class="multi-select-btn"><span class="selected-text" style="color:${displayTexts.length>0?'#2c3e50':'#7f8c8d'};">${btnText}</span> ▾</div><div class="multi-select-dropdown" onclick="event.stopPropagation()">${assignCheckboxes}</div></div></div><div class="form-group"><label>ผู้ตรวจอนุมัติงานย่อย</label><select class="sub-approver">${sApprHtml}</select></div></div><div class="form-group"><label>รายละเอียดงาน</label><textarea class="sub-desc" rows="2" style="width:100%; border:1px solid #bdc3c7; border-radius:4px; padding:8px; box-sizing:border-box; font-family:inherit; resize:vertical; color:#000;">${sub.description}</textarea></div><div class="grid-4"><div class="form-group"><label>หมวดหมู่</label><select class="sub-cat">${sCatHtml}</select></div><div class="form-group"><label>สถานะ</label><select class="sub-status">${sStatusHtml}</select></div><div class="form-group"><label>วันที่เริ่ม</label><div style="display:flex; gap:5px;"><input type="text" class="sub-start date-picker" value="${sub.startDate}" style="flex:1; background:#fff; color:#000;"><button type="button" class="btn" style="background:#e74c3c; color:white; padding:0 10px; border:none; border-radius:4px;" onclick="setNow(this)">ตอนนี้</button></div></div><div class="form-group"><label>กำหนดส่ง</label><div style="display:flex; gap:5px;"><input type="text" class="sub-due date-picker" value="${sub.dueDate}" style="flex:1; background:#fff; color:#000;"><button type="button" class="btn" style="background:#e74c3c; color:white; padding:0 10px; border:none; border-radius:4px;" onclick="setNow(this)">ตอนนี้</button></div></div></div>
+            <div class="form-group" style="margin-top:15px;"><label>หมายเหตุ</label><textarea class="sub-remark" rows="3" style="width:100%; border:1px solid #bdc3c7; border-radius:4px; padding:8px; box-sizing:border-box; font-family:inherit; resize:vertical; color:#000;">${safeRemarkText}</textarea></div>
+            </div>`;
+        });
+        document.getElementById('editSubTasksContainer').innerHTML = subHtml; initDatePickers(); document.getElementById('manageProjectModal').style.display = 'flex';
+    }
+
+    function addEditSubTask() {
+        const container = document.getElementById('editSubTasksContainer'); if(!container) return;
+        let subCatOptions = globalDropdowns.subCategory.map(opt => `<option value="${opt}">${opt}</option>`).join(''); let subStatusOptions = globalDropdowns.subTaskStatus.map(opt => `<option value="${opt}">${opt}</option>`).join(''); 
+        
+        let assignCheckboxes = ''; let approverOptions = '<option value="">-- ไม่ต้องอนุมัติ --</option>';
+        for (let dept in globalDropdowns.employees) { 
+            assignCheckboxes += `<div class="multi-select-optgroup">📂 ${dept}</div>`;
+            let group = `<optgroup label="📂 ${dept}">`; 
+            globalDropdowns.employees[dept].forEach(name => { 
+                assignCheckboxes += `<label class="multi-select-option" onclick="event.stopPropagation()"><input type="checkbox" value="${name}" class="sub-assign-cb" onchange="updateMultiSelectText(this)"> ${name}</label>`; 
+                group += `<option value="${name}">${name}</option>`; 
+            }); 
+            group += `</optgroup>`; approverOptions += group; 
+        }
+        
+        // 🚨 อัปเดต HTML: เปลี่ยน sub-remark ให้เป็น textarea
+        const html = `<div class="sub-task-box edit-sub-box" style="background:#fff; border:1px dashed #3498db; position:relative;"><button class="btn btn-remove" style="position:absolute; top:10px; right:10px; background:#e74c3c; color:white; border:none; padding:5px 10px; border-radius:4px; cursor:pointer;" onclick="this.closest('.edit-sub-box').remove()">✖ ลบ</button><input type="hidden" class="sub-id" value=""><div style="font-weight:bold; color:#3498db; margin-bottom:10px;">✨ งานย่อยใหม่</div><div class="grid-3"><div class="form-group"><label>ชื่องานย่อย</label><input type="text" class="sub-name"></div><div class="form-group"><label>ผู้รับผิดชอบ <i>(หลายคน)</i></label><div class="multi-select-container" onclick="toggleMultiSelect(this, event)"><div class="multi-select-btn"><span class="selected-text" style="color:#7f8c8d;">-- เลือกผู้รับผิดชอบ --</span> ▾</div><div class="multi-select-dropdown" onclick="event.stopPropagation()">${assignCheckboxes}</div></div></div><div class="form-group"><label>ผู้ตรวจอนุมัติงานย่อย</label><select class="sub-approver">${approverOptions}</select></div></div><div class="form-group"><label>รายละเอียดงาน</label><textarea class="sub-desc" rows="2" placeholder="อธิบายรายละเอียดงาน" style="width:100%; border:1px solid #bdc3c7; border-radius:4px; padding:8px; box-sizing:border-box; font-family:inherit; resize:vertical; color:#000;"></textarea></div><div class="grid-4"><div class="form-group"><label>หมวดหมู่</label><select class="sub-cat">${subCatOptions}</select></div><div class="form-group"><label>สถานะ</label><select class="sub-status">${subStatusOptions}</select></div><div class="form-group"><label>วันที่เริ่ม</label><div style="display:flex; gap:5px;"><input type="text" class="sub-start date-picker" style="flex:1; background:#fff; color:#000;"><button type="button" class="btn" style="background:#e74c3c; color:white; padding:0 10px; border:none; border-radius:4px;" onclick="setNow(this)">ตอนนี้</button></div></div><div class="form-group"><label>กำหนดส่ง</label><div style="display:flex; gap:5px;"><input type="text" class="sub-due date-picker" style="flex:1; background:#fff; color:#000;"><button type="button" class="btn" style="background:#e74c3c; color:white; padding:0 10px; border:none; border-radius:4px;" onclick="setNow(this)">ตอนนี้</button></div></div></div><div class="form-group" style="margin-top:15px;"><label>หมายเหตุ</label><textarea class="sub-remark" rows="3" placeholder="พิมพ์ข้อความ... (สามารถกด Enter ขึ้นบรรทัดใหม่ได้)" style="width:100%; border:1px solid #bdc3c7; border-radius:4px; padding:8px; box-sizing:border-box; font-family:inherit; resize:vertical; color:#000;"></textarea></div></div>`;
+        container.insertAdjacentHTML('beforeend', html); initDatePickers(); 
+    }
+
+    function addSubTask() {
+        const container = document.getElementById('subTasksContainer'); if(!container) return;
+        let subCatOptions = globalDropdowns.subCategory.map(opt => `<option value="${opt}">${opt}</option>`).join(''); 
+        
+        let assignCheckboxes = ''; let approverOptions = '<option value="">-- ไม่ต้องอนุมัติ --</option>';
+        for (let dept in globalDropdowns.employees) { 
+            assignCheckboxes += `<div class="multi-select-optgroup">📂 ${dept}</div>`;
+            let group = `<optgroup label="📂 ${dept}">`; 
+            globalDropdowns.employees[dept].forEach(name => { 
+                assignCheckboxes += `<label class="multi-select-option" onclick="event.stopPropagation()"><input type="checkbox" value="${name}" class="sub-assign-cb" onchange="updateMultiSelectText(this)"> ${name}</label>`; 
+                group += `<option value="${name}">${name}</option>`; 
+            }); 
+            group += `</optgroup>`; approverOptions += group; 
+        }
+
+        // 🚨 อัปเดต HTML: เปลี่ยน sub-remark ให้เป็น textarea
+        const html = `<div class="sub-task-box"><button class="btn btn-remove" onclick="this.closest('.sub-task-box').remove()">🗑 ลบ</button><div class="grid-3"><div class="form-group"><label>ชื่องานย่อย</label><input type="text" class="sub-name"></div><div class="form-group"><label>ผู้รับผิดชอบ <i>(หลายคน)</i></label><div class="multi-select-container" onclick="toggleMultiSelect(this, event)"><div class="multi-select-btn"><span class="selected-text" style="color:#7f8c8d;">-- เลือกผู้รับผิดชอบ --</span> ▾</div><div class="multi-select-dropdown" onclick="event.stopPropagation()">${assignCheckboxes}</div></div></div><div class="form-group"><label>ผู้ตรวจอนุมัติงานย่อย</label><select class="sub-approver">${approverOptions}</select></div></div><div class="form-group"><label>รายละเอียดงาน</label><textarea class="sub-desc" rows="2" placeholder="อธิบายรายละเอียดงาน" style="width:100%; border:1px solid #bdc3c7; border-radius:4px; padding:8px; box-sizing:border-box; font-family:inherit; resize:vertical; color:#000;"></textarea></div><div class="grid-3"><div class="form-group"><label>หมวดหมู่</label><select class="sub-cat">${subCatOptions}</select></div><div class="form-group"><label>วันที่เริ่ม</label><div style="display:flex; gap:5px;"><input type="text" class="sub-start date-picker" style="flex:1; background:#fff; color:#000;" placeholder="คลิกเลือกเวลา"><button type="button" class="btn" style="background:#e74c3c; color:white; padding:0 10px; border:none; border-radius:4px;" onclick="setNow(this)">ตอนนี้</button></div></div><div class="form-group"><label>กำหนดส่ง</label><div style="display:flex; gap:5px;"><input type="text" class="sub-due date-picker" style="flex:1; background:#fff; color:#000;" placeholder="คลิกเลือกเวลา"><button type="button" class="btn" style="background:#e74c3c; color:white; padding:0 10px; border:none; border-radius:4px;" onclick="setNow(this)">ตอนนี้</button></div></div></div><input type="hidden" class="sub-status" value="ยังไม่ต้องดำเนินการ"><div class="form-group" style="margin-top:15px;"><label>หมายเหตุ</label><textarea class="sub-remark" rows="3" placeholder="พิมพ์ข้อความ... (สามารถกด Enter ขึ้นบรรทัดใหม่ได้)" style="width:100%; border:1px solid #bdc3c7; border-radius:4px; padding:8px; box-sizing:border-box; font-family:inherit; resize:vertical; color:#000;"></textarea></div></div>`;
+        container.insertAdjacentHTML('beforeend', html); initDatePickers(); 
+    }
+
+    function submitData() {
+        const btn = document.getElementById('saveBtn'); if(btn) { btn.innerText = 'กำลังประมวลผล...'; btn.disabled = true; }
+        try {
+            const priorityVal = document.getElementById('mainPriority').value || ""; const approverVal = document.getElementById('mainApprover').value; let appStatus = "รอตรวจสอบ"; let appBy = approverVal || "ไม่ได้ระบุ"; 
+            if (priorityVal.includes("(1)")) { appStatus = "ไม่ต้องอนุมัติ"; appBy = "-"; } else if (!approverVal) { alert("🚨 ไม่ใช่งาน Routine! กรุณาเลือก 'ผู้อนุมัติ' ด้วยครับ"); if(btn) { btn.innerText = 'บันทึกโปรเจกต์เข้าระบบ'; btn.disabled = false; } return; }
+
+            let rlInput = document.getElementById('mainResultLink'); let mainResultL = rlInput ? rlInput.value : "";
+            const mainData = { creator: userAuth.name, taskName: document.getElementById('mainTaskName').value, brand: document.getElementById('mainBrand').value, category: document.getElementById('mainCategory').value, priority: priorityVal, assignee: document.getElementById('mainAssignee').value, startDate: document.getElementById('mainStartDate').value, dueDate: document.getElementById('mainDueDate').value, taskStatus: document.getElementById('mainTaskStatus').value, approvalStatus: appStatus, approvedBy: appBy, resultLink: mainResultL, remark: document.getElementById('mainRemark').value };
+            let mainDueObj = parseDate(mainData.dueDate); let hasDateError = false; const subTasks = [];
+            
+            // 🚨 แก้ไขการดึงค่า remark จาก textarea
+            document.querySelectorAll('#subTasksContainer .sub-task-box').forEach(box => { 
+                let sDue = box.querySelector('.sub-due').value; let sDueObj = parseDate(sDue); 
+                if(sDueObj > mainDueObj) hasDateError = true; 
+                let assignees = Array.from(box.querySelectorAll('.sub-assign-cb:checked')).map(cb => cb.value).join(', '); let approver = box.querySelector('.sub-approver') ? box.querySelector('.sub-approver').value : "";
+                
+                let remarkVal = box.querySelector('.sub-remark') ? box.querySelector('.sub-remark').value : "";
+
+                subTasks.push({ subName: box.querySelector('.sub-name').value, subCategory: box.querySelector('.sub-cat').value, subAssignee: assignees, description: box.querySelector('.sub-desc').value, startDate: box.querySelector('.sub-start').value, dueDate: sDue, status: box.querySelector('.sub-status').value, resultLink: "", remark: remarkVal, subApprover: approver }); 
+            });
+
+            google.script.run.withSuccessHandler(function(res){ 
+                if(hasDateError) { alert("✅ บันทึกข้อมูลสำเร็จ!\n\n🚨 คำเตือน: ระบบตรวจพบว่ามี 'งานย่อย' บางตัวกำหนดส่งเกินวันของ 'งานหลัก'\nกรุณากลับมาแก้ไขวันที่ให้ถูกต้องด้วยครับ"); } else { alert(res); }
+                document.querySelectorAll('input[type="text"]:not([readonly])').forEach(input => { if(input._flatpickr) input._flatpickr.clear(); else input.value = ''; }); let subCont = document.getElementById('subTasksContainer'); if(subCont) subCont.innerHTML = ''; if(btn) { btn.innerText = 'บันทึกโปรเจกต์เข้าระบบ'; btn.disabled = false; } addSubTask(); loadDashboard(false); switchView('dashboardView', 'navDashboard'); 
+            }).withFailureHandler(function(error) { alert("🚨 บันทึกไม่ได้: " + error.message); if(btn) { btn.innerText = 'บันทึกโปรเจกต์เข้าระบบ'; btn.disabled = false; } }).saveProjectData({ main: mainData, subs: subTasks, who: userAuth.name });
+        } catch (e) { alert("🚨 เกิดข้อผิดพลาดหน้าเว็บ: " + e.message); if(btn) { btn.innerText = 'บันทึกโปรเจกต์เข้าระบบ'; btn.disabled = false; } }
+    }
+
+    function saveFullProjectUpdate() {
+        const btn = document.getElementById('btnSaveFullUpdate'); if(btn) { btn.innerText = 'กำลังบันทึก...'; btn.disabled = true; }
+        try {
+            let mainDueStr = document.getElementById('editMainDue').value; let mainDueObj = parseDate(mainDueStr); let hasDateError = false; let rEditInput = document.getElementById('editMainResultLink'); let mResultEdit = rEditInput ? rEditInput.value : "";
+            let payload = { mainCode: document.getElementById('manageProjCodeInput').value, who: userAuth.name, main: { name: document.getElementById('editMainName').value, owner: document.getElementById('editMainAssignee').value, brand: document.getElementById('editMainBrand').value, category: document.getElementById('editMainCategory').value, priority: document.getElementById('editMainPriority').value, status: document.getElementById('editMainStatus').value, startDate: document.getElementById('editMainStart').value, dueDate: mainDueStr, resultLink: mResultEdit, remark: document.getElementById('editMainRemark').value }, subs: [] };
+
+            document.querySelectorAll('#editSubTasksContainer .edit-sub-box').forEach(box => { 
+                let sDue = box.querySelector('.sub-due').value; let sDueObj = parseDate(sDue); 
+                if(sDueObj > mainDueObj) hasDateError = true; 
+                let assignees = Array.from(box.querySelectorAll('.sub-assign-cb:checked')).map(cb => cb.value).join(', '); let approver = box.querySelector('.sub-approver') ? box.querySelector('.sub-approver').value : "";
+                
+                let remarkVal = box.querySelector('.sub-remark') ? box.querySelector('.sub-remark').value : "";
+
+                payload.subs.push({ subId: box.querySelector('.sub-id').value, name: box.querySelector('.sub-name').value, category: box.querySelector('.sub-cat').value, assignee: assignees, description: box.querySelector('.sub-desc').value, startDate: box.querySelector('.sub-start').value, dueDate: sDue, status: box.querySelector('.sub-status').value, remark: remarkVal, subApprover: approver }); 
+            });
+
+            google.script.run.withSuccessHandler(function(res){ 
+                if(hasDateError) { alert("✅ บันทึกการอัปเดตสำเร็จ!\n\n🚨 คำเตือน: ระบบตรวจพบว่ามี 'งานย่อย' บางตัวกำหนดส่งเกินวันของ 'งานหลัก'\nทีมงานอาจเกิดความสับสนได้ กรุณาตรวจสอบอีกครั้งครับ"); } else { alert(res); }
+                closeManageProject(); if(btn) { btn.innerText = '💾 บันทึกการเปลี่ยนแปลงทั้งหมด'; btn.disabled = false; } loadDashboard(false); 
+            }).withFailureHandler(function(error) { alert("🚨 บันทึกไม่ได้: " + error.message); if(btn) { btn.innerText = '💾 บันทึกการเปลี่ยนแปลงทั้งหมด'; btn.disabled = false; } }).updateFullProject(payload);
+        } catch (e) { alert("🚨 เกิดข้อผิดพลาดหน้าเว็บ: " + e.message); if(btn) { btn.innerText = '💾 บันทึกการเปลี่ยนแปลงทั้งหมด'; btn.disabled = false; } }
+    }
+
+    function openEditModal(subId, subCode, subName, currentStatus, link, remark, assigneesStr, approverStr) {
+        let elSubId = document.getElementById('editSubId'); let elCodeStr = document.getElementById('editSubCodeStr'); let elSubName = document.getElementById('editSubName'); let elLink = document.getElementById('editSubLink'); let elRemark = document.getElementById('editSubRemark');
+        if(elSubId) elSubId.value = subId || ''; if(elCodeStr) elCodeStr.innerText = subCode || ''; if(elSubName) elSubName.value = subName || ''; 
+        let currentUser = userAuth.name; let isAssignee = (assigneesStr || "").split(',').map(s=>s.trim().toLowerCase()).includes(currentUser.toLowerCase()); let isApprover = safeCompare(approverStr, currentUser); let hasNoApprover = (approverStr === "-");
+        let statusOptions = `<option value="${currentStatus}" selected disabled>${currentStatus} (สถานะปัจจุบัน)</option>`;
+        
+        if(isApprover && !isAssignee) { 
+            statusOptions += `<option value="เสร็จสิ้นและตรวจสอบแล้ว">✅ เสร็จสิ้นและตรวจสอบแล้ว</option><option value="ปฎิเสธ / แก้ไข">❌ ปฎิเสธ / แก้ไข</option>`; 
+            if(link && link.trim() !== '') { elLink.outerHTML = `<div id="editSubLink" data-val="${link}" style="margin-top:5px;"><a href="${link}" target="_blank" class="link-btn">👉 ดูผลงานที่ลูกทีมแนบมา</a></div>`; } else { elLink.outerHTML = `<div id="editSubLink" data-val="" style="color:#e74c3c; font-style:italic; margin-top:5px;">(ลูกทีมไม่ได้แนบลิงก์ผลงานมาให้)</div>`; }
+        } else { 
+            if(isAssignee && !isApprover) {
+                statusOptions += `<option value="กำลังดำเนินการ">กำลังดำเนินการ</option><option value="เสร็จสิ้น (รอตรวจ)">เสร็จสิ้น (รอตรวจ)</option>`;
+                if(hasNoApprover) { statusOptions += `<option value="เสร็จสิ้นและตรวจสอบแล้ว">✅ เสร็จสิ้นและตรวจสอบแล้ว (ไม่ต้องรอตรวจ)</option>`; }
+            } else {
+                globalDropdowns.subTaskStatus.forEach(s => { let isRestricted = ["ยังไม่ต้องดำเนินการ", "เสร็จสิ้นและตรวจสอบแล้ว", "ยังไม่ได้ทำ", "ปฎิเสธ", "ปฏิเสธ"].some(w => (s || "").includes(w)); if(!isRestricted || isApprover || userAuth.overview === "YES") { statusOptions += `<option value="${s}">${s}</option>`; } });
+            }
+            if(elLink.tagName !== 'INPUT') { elLink.outerHTML = `<input type="text" id="editSubLink" placeholder="วางลิงก์ Google Drive หรือลิงก์ที่เกี่ยวข้อง" value="${link}">`; } else { elLink.value = link || '';  }
+        }
+        
+        // 🚨 แปลง <br> กลับเป็น \n เพื่อแสดงผลใน textarea ของหน้าอัปเดตงานย่อย
+        if(elRemark) elRemark.value = (remark || '').replace(/<br>/g, '\n').replace(/&quot;/g, '"');
+        
+        let elStatus = document.getElementById('editSubStatus'); if(elStatus) elStatus.innerHTML = statusOptions; let elModal = document.getElementById('editSubTaskModal'); if(elModal) elModal.style.display = 'flex';
+    }
+
+    function closeEditModal() { let elModal = document.getElementById('editSubTaskModal'); if(elModal) elModal.style.display = 'none'; }
+    
+    function saveSubTaskUpdate() {
+        const btn = document.getElementById('btnSaveUpdate'); if(btn) { btn.innerText = 'กำลังบันทึก...'; btn.disabled = true; }
+        try {
+            let linkVal = ''; let elLink = document.getElementById('editSubLink');
+            if (elLink) { if(elLink.tagName === 'INPUT') linkVal = elLink.value; else linkVal = elLink.getAttribute('data-val') || ''; }
+            let newStatus = document.getElementById('editSubStatus') ? document.getElementById('editSubStatus').value : ''; newStatus = newStatus.replace(" (ไม่ต้องรอตรวจ)", "");
+            
+            // 🚨 ไม่ลืมส่งค่า remark 
+            const payload = { subId: document.getElementById('editSubId') ? document.getElementById('editSubId').value : '', subName: document.getElementById('editSubName') ? document.getElementById('editSubName').value : '', status: newStatus, resultLink: linkVal, remark: document.getElementById('editSubRemark') ? document.getElementById('editSubRemark').value : '', who: userAuth.name };
+            
+            if(payload.status === document.getElementById('editSubStatus').options[0].value) { alert("กรุณาเลือกเปลี่ยนสถานะก่อนกดบันทึกครับ"); if(btn) { btn.innerText = 'บันทึกการอัปเดต'; btn.disabled = false; } return; }
+            google.script.run.withSuccessHandler(function(res) { 
+                alert(res); closeEditModal(); if(btn) { btn.innerText = 'บันทึกการอัปเดต'; btn.disabled = false; } loadDashboard(false); 
+            }).withFailureHandler(function(error) { alert("🚨 บันทึกไม่ได้: " + error.message); if(btn) { btn.innerText = 'บันทึกการอัปเดต'; btn.disabled = false; } }).updateSubTask(payload);
+        } catch (e) { alert("🚨 เกิดข้อผิดพลาดหน้าเว็บ: " + e.message); if(btn) { btn.innerText = 'บันทึกการอัปเดต'; btn.disabled = false; } }
+    }
+
+    function deleteProject(mainCode) {
+        if(confirm(`⚠️ คำเตือนสำคัญ!\n\nคุณกำลังจะลบโปรเจกต์ [${mainCode}] และงานย่อยที่เกี่ยวข้องทั้งหมดทิ้งอย่างถาวร\n\nการกระทำนี้ลบแล้วไม่สามารถกู้คืนได้ คุณแน่ใจหรือไม่?`)) {
+            google.script.run.withSuccessHandler(function(res){ alert(res); loadDashboard(false); }).withFailureHandler(function(error) { alert("🚨 ลบไม่ได้: " + error.message); }).deleteProjectData(mainCode, userAuth.name);
+        }
+    }
+</script>
